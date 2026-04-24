@@ -368,36 +368,40 @@ Boundary conditions such as missing data, empty result sets, and invalid resourc
 \subsubsection{Black Box Test Evidence}
 
 All executed test cases were recorded and maintained as structured documentation.
+Figures~\ref{fig:bboxutest0} to~\ref{fig:bboxutest3} present the black box test evidence artifacts.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{images/tests1.png}
-    \caption{BlackBox Tests fig:1}
+    \caption{Black Box Test Evidence 1}
+    \label{fig:bboxutest0}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{images/tests2.png}
-    \caption{BlackBox Tests fig:2}
+    \caption{Black Box Test Evidence 2}
+    \label{fig:bboxutest0b}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{images/bboxutest1.png}
-    \caption{BlackBox Tests fig:3}
+    \caption{Black Box Test Evidence 3}
     \label{fig:bboxutest1}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{images/bboxutest2.png}
-    \caption{BlackBox Tests fig:4}
+    \caption{Black Box Test Evidence 4}
+    \label{fig:bboxutest2}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{images/bboxutest3.png}
-    \caption{BlackBox Tests fig:5}
+    \caption{Black Box Test Evidence 5}
     \label{fig:bboxutest3}
 \end{figure}
 
@@ -494,12 +498,17 @@ Overall Pass Rate & 91\% & Stable with minor issues \\ \hline
 \caption{Overall Unit Testing Summary}
 \end{table}
 
+Unit test execution evidence is shown in Figures~\ref{fig:wboxutest1} to~\ref{fig:wboxutest4}.
+
 \subsection{Test Evidence}
+
+Overall test execution output is shown in Figure~\ref{fig:test-exec-summary}.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{images/tests-summary.png}
     \caption{Test Execution Results}
+    \label{fig:test-exec-summary}
 \end{figure}
 
 
@@ -516,6 +525,7 @@ All critical defects identified during testing were resolved, and remaining enha
 \subsubsection{Summary}
 
 Integration tests validated end-to-end behavior across API layers, databases, and services using the repository's pytest setup. The suite covers authentication, projects, files, search, chat, workflows, and health checks.
+Figure~\ref{fig:apiintegtest1} provides integration API test evidence.
 
 \begin{itemize}
     \item \textbf{Total integration tests:} ~60 (PHASE1 \& TESTING\_GUIDE) — reported as 100\% passing in the repo docs.

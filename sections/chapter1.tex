@@ -4,7 +4,7 @@
 CoWriteIA is an AI-powered writing assistant designed to support creative writers, novelists, researchers, and content creators. Modern writing workflows require managing notes, drafts, characters, scenes, and references across several disconnected tools, which often breaks focus and reduces productivity. Writers struggle to maintain narrative consistency, track earlier ideas, and keep a coherent writing style when working on long projects. Existing tools offer only isolated features such as grammar correction or basic generation and do not provide project-level understanding or semantic memory~\cite{lewis2020rag,reimers2019sentencebert}. 
 
 CoWriteIA addresses these issues by creating a unified, intelligent workspace where all project files are indexed, searchable, and semantically connected. By integrating project-level memory, context-aware writing, dialogue generation, character management, and research support, the system helps writers maintain consistency and improve their creative process. The platform is designed to reduce cognitive load, avoid fragmented workflows, and provide meaningful AI assistance throughout the writing journey. 
-This chapter presents the background, existing solutions, problem statement, scope, project modules, and work division that form the foundation of this system.
+This chapter presents the background, existing solutions, problem statement, scope, project modules, and work division that ground the implemented system.
  
 \section{Existing Solutions}
 
@@ -27,11 +27,11 @@ Scrivener & Strong organizational tool for large writing projects with chapter/s
 
 Writers working on long-form projects often lose track of earlier ideas, character traits, plot points, and stylistic decisions. This leads to inconsistencies, repeated ideas, and a break in narrative flow. Existing tools either provide isolated writing support or document organization but do not combine both with meaningful context. AI tools can generate text but fail to maintain project-level continuity, making the generated text feel disconnected from the writer's established style or storyline. Writers spend significant time searching through older drafts to recall information~\cite{guu2020realm,lewis2020rag}.
 
-CoWriteIA aims to solve these problems by offering an intelligent system that continuously indexes all project content, retrieves relevant context, and assists writers in generating text that aligns with their established narrative and writing style. By maintaining a unified knowledge base and supporting character consistency, scene management, dialogue generation, and semantic search, the system reduces cognitive overhead and improves creative flow.
+CoWriteIA addresses these problems through an intelligent system that continuously indexes project content, retrieves relevant context, and assists writers in generating text aligned with their established narrative and style. By maintaining a unified knowledge base and supporting character consistency, scene management, dialogue generation, and semantic search, the system reduces cognitive overhead and improves creative flow.
 
 \section{Scope}
 
-The scope of \textbf{CoWriteIA} encompasses the development of an intelligent, AI-driven writing environment designed to support long-form creative and research-oriented projects. The system focuses on providing project-level understanding, semantic reasoning, and context-aware assistance to help writers maintain consistency, creativity, and workflow continuity.
+The scope of \textbf{CoWriteIA} covers an intelligent, AI-driven writing environment designed to support long-form creative and research-oriented projects. The system focuses on project-level understanding, semantic reasoning, and context-aware assistance to help writers maintain consistency, creativity, and workflow continuity.
 
 \subsection*{In-Scope Features}
 
@@ -66,7 +66,7 @@ CoWriteIA is limited to enhancing the \emph{writing process itself}: maintaining
 
 \section{Modules}
 
-The project consists of several modules, each responsible for a unique part of the writing workflow.
+The project is organized into several modules, each responsible for a specific part of the writing workflow.
 
 \subsection{Module 1: Project Indexing and Semantic Memory}
 This module extracts, embeds, and organizes all project content into a semantic database for context-aware retrieval~\cite{reimers2019sentencebert}. 
@@ -76,7 +76,7 @@ This module extracts, embeds, and organizes all project content into a semantic 
 \end{enumerate}
 
 \subsection{Module 2: Context-Aware Writing Assistant}
-This module provides intelligent writing suggestions that match the user's tone and project context~\cite{lewis2020rag}.
+This module provides intelligent writing suggestions aligned with the user's tone and project context~\cite{lewis2020rag}.
 \begin{enumerate}
     \item Generates coherent drafts aligned with past content.
     \item Retrieves relevant information to maintain consistency.
@@ -90,38 +90,40 @@ This module stores and manages characters, scenes, and narrative details.
 \end{enumerate}
 
 \subsection{Module 4: Dialogue Generation}
-Generates natural, character-consistent dialogue suggestions. 
+This module generates natural, character-consistent dialogue suggestions.
 \begin{enumerate}
     \item Dialogue generation based on personality and context.
     \item Supports narrative flow within scenes.
 \end{enumerate}
 
 \subsection{Module 5: Research Integration}
-Fetches factual data from external sources for realistic writing. 
+This module retrieves factual data from external sources for realistic writing.
 \begin{enumerate}
     \item Web-based research retrieval.
     \item Insertable factual references.
 \end{enumerate}
 
 \subsection{Module 6: Project Query Interface}
-Allows users to ask natural-language questions about their own project. 
+This module allows users to ask natural-language questions about their own project.
 \begin{enumerate}
     \item Semantic question-answering.
     \item Source-linked responses.
 \end{enumerate}
 
 \subsection{Module 7: Gap Analysis Module}
-Analyzes draft content to find missing or weak areas. 
+This module analyzes draft content to find missing or weak areas.
 \begin{enumerate}
     \item Identifies incomplete sections.
     \item Suggests improvements for clarity and consistency.
 \end{enumerate}
 
+Collectively, these seven modules are implemented and integrated in CoWriteIA, providing a unified workflow for planning, writing, retrieval, assistance, and quality improvement.
+
 \clearpage
 
 \section{Work Division}
 
-The work completed during FYP-1 was divided into two major iterations.  
+Development work was carried out across four major iterations.
 A summary of responsibilities is presented in the tables below.
 
 \subsection*{Iteration I Tasks}
