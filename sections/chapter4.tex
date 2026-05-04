@@ -500,6 +500,88 @@ Overall Pass Rate & 91\% & Stable with minor issues \\ \hline
 
 Unit test execution evidence is shown in Figures~\ref{fig:wboxutest1} to~\ref{fig:wboxutest4}.
 
+\subsubsection{Current Iteration Test Additions}
+
+The current iteration introduced comprehensive test coverage for the three new features: Dialogue Generation, Character Repository, and Research Integration Agent. These tests validate both API-level integration and service-level unit functionality.
+
+\textbf{Dialogue Generation Tests:}
+
+\begin{itemize}
+    \item \textbf{Integration Tests (5 test cases):}
+    \begin{itemize}
+        \item \texttt{test\_generate\_dialogue\_suggestion\_continue}: Validates continue-mode suggestion generation with character context
+        \item \texttt{test\_generate\_dialogue\_suggestion\_rewrite}: Tests rewrite-mode suggestions for dialogue text
+        \item \texttt{test\_generate\_suggestion\_validation\_error}: Verifies request validation for missing required fields
+        \item \texttt{test\_generate\_suggestion\_unauthorized}: Ensures authentication is enforced
+        \item \texttt{test\_track\_accept\_and\_reject\_suggestion}: Tests suggestion acceptance/rejection tracking
+    \end{itemize}
+    \item \textbf{Unit Tests (13 test cases):}
+    \begin{itemize}
+        \item \texttt{test\_generate\_suggestion\_success}: Validates end-to-end suggestion generation flow
+        \item \texttt{test\_gather\_story\_context}: Tests character, location, and theme extraction from project context
+        \item \texttt{test\_analyze\_writing\_style}: Validates POV, tense, and formality detection
+        \item \texttt{test\_build\_prompt\_continue}: Tests prompt construction for continue mode with character details
+        \item \texttt{test\_build\_prompt\_includes\_dialogue\_tone\_and\_character\_profile\_details}: Verifies character attribute injection into prompts
+        \item \texttt{test\_analyze\_writing\_style\_detects\_informal\_tone\_from\_contractions}: Tests formality detection heuristics
+        \item \texttt{test\_gather\_story\_context\_keeps\_only\_mentioned\_characters\_for\_dialogue}: Validates context filtering logic
+        \item Additional tests for complete/rewrite modes, error handling, and sentence extraction
+    \end{itemize}
+\end{itemize}
+
+\textbf{Character Repository Tests:}
+
+\begin{itemize}
+    \item \textbf{Integration Tests (3 test cases):}
+    \begin{itemize}
+        \item \texttt{test\_list\_project\_entities\_returns\_character\_profiles}: Validates entity listing endpoint returns character data
+        \item \texttt{test\_list\_project\_entities\_character\_type\_filter}: Tests entity type filtering for character-only results
+        \item \texttt{test\_list\_project\_entities\_unauthorized}: Ensures authentication is required
+    \end{itemize}
+    \item \textbf{Unit Tests (4 test cases):}
+    \begin{itemize}
+        \item \texttt{test\_entity\_model\_stores\_character\_attributes\_and\_role}: Validates character attribute persistence in entity model
+        \item \texttt{test\_entity\_repository\_get\_by\_project\_and\_character\_type}: Tests repository filtering by project and entity type
+        \item \texttt{test\_process\_uploaded\_file\_updates\_existing\_character\_metadata}: Validates incremental character profile updates
+        \item \texttt{test\_process\_uploaded\_file\_creates\_new\_character\_when\_missing}: Tests new character creation flow
+    \end{itemize}
+\end{itemize}
+
+\textbf{Research Integration Agent Tests:}
+
+\begin{itemize}
+    \item \textbf{Integration Tests (4 test cases):}
+    \begin{itemize}
+        \item \texttt{test\_research\_chat\_success\_returns\_response\_with\_sources}: Validates end-to-end research flow with source attribution
+        \item \texttt{test\_research\_chat\_returns\_503\_when\_search\_unavailable}: Tests graceful degradation when Tavily API is unavailable
+        \item \texttt{test\_research\_chat\_wraps\_unexpected\_errors\_as\_500}: Validates error handling for unexpected failures
+        \item \texttt{test\_research\_chat\_unauthorized}: Ensures authentication is enforced
+    \end{itemize}
+    \item \textbf{Unit Tests (7 test cases):}
+    \begin{itemize}
+        \item \texttt{test\_search\_success\_maps\_results\_and\_clamps\_max\_results}: Validates search result mapping and result limiting
+        \item \texttt{test\_search\_raises\_when\_api\_key\_missing}: Tests API key validation
+        \item \texttt{test\_search\_reraises\_http\_status\_error}: Validates HTTP error propagation
+        \item \texttt{test\_search\_reraises\_timeout\_exception}: Tests timeout handling
+        \item \texttt{test\_format\_results\_for\_llm\_with\_results}: Validates LLM context formatting with source numbering
+        \item \texttt{test\_format\_results\_for\_llm\_empty\_results}: Tests empty result handling
+        \item \texttt{test\_is\_available}: Validates service availability checking
+    \end{itemize}
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|p{4.5cm}|p{2cm}|p{2cm}|p{2cm}|}
+\hline
+\textbf{Feature Module} & \textbf{Integration Tests} & \textbf{Unit Tests} & \textbf{Total} \\ \hline
+Dialogue Generation & 5 & 13 & 18 \\ \hline
+Character Repository & 3 & 4 & 7 \\ \hline
+Research Integration Agent & 4 & 7 & 11 \\ \hline
+\textbf{New Tests Total} & \textbf{12} & \textbf{24} & \textbf{36} \\ \hline
+\end{tabular}
+\caption{Current Iteration Test Coverage by Feature}
+\end{table}
+
 \subsection{Test Evidence}
 
 Overall test execution output is shown in Figure~\ref{fig:test-exec-summary}.
@@ -519,6 +601,92 @@ The testing results showed that the system successfully handled valid requests a
 
 All critical defects identified during testing were resolved, and remaining enhancements will be addressed in the next development phase.
 
+\subsection{Overall Testing Statistics}
+
+The current iteration expanded test coverage significantly with the addition of 36 new test cases for the three major features (Dialogue Generation, Character Repository, and Research Integration Agent). The comprehensive test suite now includes:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{4cm}|p{3cm}|p{4cm}|}
+\hline
+\textbf{Test Category} & \textbf{Count} & \textbf{Coverage} \\ \hline
+Total Backend Tests & 231 & Integration + Unit \\ \hline
+Integration API Tests & ~70 & All API endpoints \\ \hline
+Unit Service Tests & ~90 & Core services \\ \hline
+Unit Repository Tests & ~30 & Data access layer \\ \hline
+Unit Model Tests & ~41 & Data models \\ \hline
+\textbf{Backend Pass Rate} & \textbf{91\%} & 210/231 passing \\ \hline
+\textbf{Backend Code Coverage} & \textbf{32\%} & Statement coverage \\ \hline
+\end{tabular}
+\caption{Comprehensive Testing Statistics}
+\end{table}
+
+\textbf{Test Distribution by Module:}
+
+\begin{itemize}
+    \item \textbf{Authentication \& Authorization:} 6 tests (registration, login, token validation, access control)
+    \item \textbf{Project Management:} 12 tests (CRUD operations, isolation, pagination)
+    \item \textbf{File Operations:} 19 tests (upload, processing, content retrieval, reprocessing)
+    \item \textbf{Search \& Retrieval:} 18 tests (semantic search, hybrid search, autocomplete, similarity)
+    \item \textbf{Chat \& Conversation:} 13 tests (message handling, context assembly, conversation management)
+    \item \textbf{Copilot \& Dialogue Generation:} 18 tests (suggestion generation, style analysis, context gathering)
+    \item \textbf{Character Repository:} 7 tests (entity persistence, filtering, incremental updates)
+    \item \textbf{Research Integration:} 11 tests (web search, synthesis, source attribution)
+    \item \textbf{Entity Extraction:} 6 tests (character/location extraction, validation)
+    \item \textbf{Relationship Discovery:} 9 tests (co-occurrence analysis, relationship classification)
+    \item \textbf{RAG Context Assembly:} 5 tests (context retrieval, formatting, entity enrichment)
+    \item \textbf{Embedding \& Vector Operations:} 3 tests (embedding generation, similarity calculation)
+    \item \textbf{Text Processing:} 4 tests (extraction, chunking, incremental processing)
+    \item \textbf{LLM Integration:} 12 tests (Groq service, HuggingFace service, genre-specific models)
+    \item \textbf{Edit Proposals:} 12 tests (diff generation, proposal parsing, prompt building)
+    \item \textbf{Indexing \& Background Tasks:} 8 tests (task management, status tracking, cancellation)
+    \item \textbf{Position \& Scene APIs:} 29 tests (line retrieval, scene detection, entity mentions)
+    \item \textbf{Relationships API:} 12 tests (discovery, network analysis, statistics)
+    \item \textbf{Integration Workflows:} 3 tests (end-to-end project workflows, multi-file operations)
+    \item \textbf{Health \& System:} 3 tests (health checks, API documentation availability)
+\end{itemize}
+
+\textbf{Code Coverage Analysis:}
+
+The backend code coverage report indicates 32\% statement coverage across the codebase. Key coverage highlights:
+
+\begin{itemize}
+    \item \textbf{High Coverage Modules (>70\%):}
+    \begin{itemize}
+        \item Core configuration and models: 100\% (initialization modules)
+        \item Research endpoint: 100\% (36/36 statements)
+        \item Web search service: 92\% (47/51 statements)
+        \item Copilot service: 87\% (130/149 statements)
+        \item Edit proposal service: 85\% (70/82 statements)
+        \item Groq service: 79\% (49/62 statements)
+    \end{itemize}
+    \item \textbf{Medium Coverage Modules (40-70\%):}
+    \begin{itemize}
+        \item AI chat service: 71\% (65/91 statements)
+        \item RAG context service: 63\% (78/124 statements)
+        \item Text extraction service: 56\% (140/248 statements)
+        \item HuggingFace service: 51\% (35/69 statements)
+    \end{itemize}
+    \item \textbf{Lower Coverage Modules (<40\%):}
+    \begin{itemize}
+        \item Background indexing tasks: 0\% (302 statements untested - requires Celery infrastructure)
+        \item Scene detection services: 0\% (268 statements - complex LLM-dependent logic)
+        \item Search cache service: 0\% (210 statements - Redis-dependent caching layer)
+        \item File service: 28\% (62/221 statements)
+        \item Entity extraction service: 40\% (177/440 statements)
+    \end{itemize}
+\end{itemize}
+
+\textbf{Testing Methodology:}
+
+\begin{itemize}
+    \item \textbf{Integration Tests:} Use pytest with async fixtures, test database isolation, and API client mocking
+    \item \textbf{Unit Tests:} Employ comprehensive mocking (AsyncMock, Mock) to isolate service logic from external dependencies
+    \item \textbf{Test Fixtures:} Shared fixtures for authentication, projects, files, and test data setup
+    \item \textbf{Coverage Tools:} pytest-cov for statement coverage analysis, HTML reports for detailed line-by-line coverage
+    \item \textbf{CI/CD Integration:} Tests run via pytest with coverage reporting; batch scripts provided for Windows/Linux environments
+\end{itemize}
+
 \subsection{Integration Testing}
 \label{subsec:integration-testing}
 
@@ -528,7 +696,7 @@ Integration tests validated end-to-end behavior across API layers, databases, an
 Figure~\ref{fig:apiintegtest1} provides integration API test evidence.
 
 \begin{itemize}
-    \item \textbf{Total integration tests:} ~60 (PHASE1 \& TESTING\_GUIDE) — reported as 100\% passing in the repo docs.
+    \item \textbf{Total integration tests:} ~70 (PHASE1 \& TESTING\_GUIDE) — reported as 100\% passing in the repo docs.
     \item \textbf{Pytest configuration:} Tests discovered under \texttt{backend/tests/}; notable files include \texttt{test\_auth\_api.py}, \texttt{test\_projects\_api.py}, \texttt{test\_files\_api.py}, \texttt{test\_search\_api.py}, \texttt{test\_chat\_api.py}, \texttt{test\_integration\_workflows.py}, and \texttt{test\_health.py}.
     \item \textbf{Notes:} Built from testing documentation (\texttt{WHITEBOX\_TESTING\_COMPLETE.md}, \texttt{PHASE1\_TESTING\_SUMMARY.md}, \texttt{TESTING\_GUIDE.md}, \texttt{TEST\_SUMMARY.md}) and concrete repo files (\texttt{conftest.py}, \texttt{pytest.ini}, run scripts). Exact counts may vary with updates.
 \end{itemize}
@@ -539,6 +707,47 @@ Figure~\ref{fig:apiintegtest1} provides integration API test evidence.
     \caption{Integration API Test Evidence}
     \label{fig:apiintegtest1}
 \end{figure}
+
+\subsubsection{Frontend Testing Infrastructure}
+
+The frontend testing infrastructure is configured using Jest and React Testing Library for component and integration testing. The test configuration supports:
+
+\begin{itemize}
+    \item \textbf{Test Framework:} Jest with Next.js integration via \texttt{next/jest}
+    \item \textbf{Test Environment:} jsdom for DOM simulation
+    \item \textbf{Component Testing:} React Testing Library for component behavior validation
+    \item \textbf{Coverage Collection:} Configured to collect coverage from all source files in \texttt{src/} directory
+    \item \textbf{Module Resolution:} Path aliases configured (\texttt{@/} maps to \texttt{src/})
+    \item \textbf{Transform Handling:} ESM package transformation for modern dependencies (geist, lucide-react, framer-motion, @radix-ui)
+\end{itemize}
+
+\textbf{Frontend Coverage Configuration:}
+
+\begin{itemize}
+    \item \textbf{Test Patterns:} \texttt{src/**/__tests__/**/*.{js,jsx,ts,tsx}} and \texttt{src/**/*.{test,spec}.{js,jsx,ts,tsx}}
+    \item \textbf{Coverage Exclusions:} TypeScript definition files, layout components, global CSS
+    \item \textbf{Coverage Output:} HTML reports generated in \texttt{frontend\_coverage/} directory
+    \item \textbf{Setup Files:} \texttt{jest.setup.js} for test environment configuration
+\end{itemize}
+
+\textbf{Frontend Test Scope:}
+
+The frontend testing infrastructure is prepared to validate:
+
+\begin{itemize}
+    \item Authentication flows (login, registration, password reset)
+    \item Project management UI components
+    \item File upload and management interfaces
+    \item Chat and conversation UI components
+    \item Copilot suggestion display and interaction
+    \item Character repository visualization
+    \item Research integration UI components
+    \item Search and autocomplete functionality
+    \item Error handling and loading states
+    \item Responsive design and accessibility compliance
+\end{itemize}
+
+\textbf{Note:} Frontend test implementation is configured and ready for expansion in subsequent development phases. The current iteration focused on backend service validation and API integration testing to ensure core functionality stability before comprehensive UI testing.
 
 \section{Current Iteration Features}
 \label{sec:current-iteration-features}
