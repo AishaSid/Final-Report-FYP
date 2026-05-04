@@ -1,5 +1,7 @@
 \chapter{Implementation and Testing}
 \label{ch:implementation-testing}
+\sloppy
+\setlength{\emergencystretch}{3em}
 
 This chapter describes the current implementation status of the CoWriteIA system and the testing strategies applied to validate its functionality. The focus of this phase was to implement the core backend services, major APIs, and conduct rigorous black box testing to ensure that all user-facing functionalities behave correctly according to the system requirements.
 
@@ -84,7 +86,7 @@ The system splits extracted text into sentence-aware chunks within a target size
 
 \begin{algorithm}[H]
 \caption{ChunkTextAndCreateChunks}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require \textit{file\_id}, \textit{project\_id}, \textit{full\_text}, \textit{max\_chunk\_size}, \textit{overlap} (optional), \textit{start\_chunk\_index} (default 0)
 \Ensure List of \texttt{TextChunk} models \textit{chunks}
 \State sentences $\leftarrow$ \texttt{TextExtractionService.\_split\_into\_sentences}(full\_text)
@@ -95,7 +97,8 @@ The system splits extracted text into sentence-aware chunks within a target size
     \If{current\_word\_count + sentence\_words $>$ max\_chunk\_size \textbf{and} current\_chunk\_sentences not empty}
         \State chunk\_text $\leftarrow$ \texttt{join}(current\_chunk\_sentences, " ")
         \State start\_pos $\leftarrow$ compute absolute start in \textit{full\_text}
-        \State chunk\_model $\leftarrow$ \texttt{TextExtractionService.\_create\_text\_chunk}(file\_id, project\_id, chunk\_text, chunk\_index, start\_pos, current\_word\_count)
+        \State chunk\_model $\leftarrow$ \texttt{\seqsplit{TextExtractionService.\_create\_text\_chunk}}(file\_id,
+        \Statex \hspace{4em} project\_id, chunk\_text, chunk\_index, start\_pos, current\_word\_count)
         \State append chunk\_model to chunks
         \State chunk\_index $\leftarrow$ chunk\_index + 1
         \If{overlap configured}
@@ -110,18 +113,19 @@ The system splits extracted text into sentence-aware chunks within a target size
 \If{current\_chunk\_sentences not empty}
     \State chunk\_text $\leftarrow$ \texttt{join}(current\_chunk\_sentences, " ")
     \State start\_pos $\leftarrow$ compute absolute start in \textit{full\_text}
-    \State chunk\_model $\leftarrow$ \texttt{TextExtractionService.\_create\_text\_chunk}(file\_id, project\_id, chunk\_text, chunk\_index, start\_pos, current\_word\_count)
+    \State chunk\_model $\leftarrow$ \texttt{\seqsplit{TextExtractionService.\_create\_text\_chunk}}(file\_id,
+    \Statex \hspace{4em} project\_id, chunk\_text, chunk\_index, start\_pos, current\_word\_count)
     \State append chunk\_model to chunks
 \EndIf
 \State \Return chunks
-\end{algorithmic}
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
 \textbf{Notes:}
 \begin{itemize}
-    \item Uses sentence-aware splitting and target size with optional overlap per \texttt{TextExtractionService}.
-    \item Returns \texttt{TextChunk} Pydantic models; persistence occurs later (e.g., in \texttt{store\_text\_chunks\_with\_embeddings}).
+    \item Uses sentence-aware splitting and target size with optional overlap per \texttt{\seqsplit{TextExtractionService}}.
+    \item Returns \texttt{TextChunk} Pydantic models; persistence occurs later (e.g., in \texttt{\seqsplit{store\_text\_chunks\_with\_embeddings}}).
 \end{itemize}
 
 \subsection{Pseudocode: Embedding Generation and Storage}
@@ -130,37 +134,37 @@ This stage encodes chunked text into dense vectors and persists both the metadat
 
 \begin{algorithm}[H]
 \caption{GenerateAndPersistEmbeddings}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require \textit{project\_id}, \textit{file\_id}, \textit{list\_of\_chunks} (content strings)
 \Ensure List of created/updated \texttt{TextChunk} records with embeddings
 \State chunk\_texts $\leftarrow$ [\,\texttt{chunk.content} for \textit{chunk} in \textit{list\_of\_chunks}\,]
-\State embeddings $\leftarrow$ \texttt{EmbeddingService.generate\_embeddings}(chunk\_texts)
+\State embeddings $\leftarrow$ \texttt{\seqsplit{EmbeddingService.generate\_embeddings}}(chunk\_texts)
 \Comment{Runs threadpool synchronous encoding; model loads lazily}
 \State created\_chunks $\leftarrow$ [\,]
 \For{each $(chunk\_info, embedding)$ in \texttt{zip}(list\_of\_chunks, embeddings)}
     \State chunk\_model $\leftarrow$ \texttt{build TextChunk}(\,
-        file\_id $=$ file\_id,\; project\_id $=$ project\_id,\;\
-        content $=$ chunk\_info.content,\; start\_position $= \dots$,\; end\_position $= \dots$,\;\
-        chunk\_index $=$ chunk\_info.chunk\_index,\; word\_count $= \dots$,\;\
-        embedding\_vector $=$ embedding\,)
-    \State saved\_chunk $\leftarrow$ \texttt{TextChunkRepository.create}(chunk\_model)
+        file\_id $=$ file\_id,\; project\_id $=$ project\_id,
+        \Statex \hspace{4em} content $=$ chunk\_info.content,\; start\_position $= \dots$,\; end\_position $= \dots$,
+        \Statex \hspace{4em} chunk\_index $=$ chunk\_info.chunk\_index,\; word\_count $= \dots$,
+        \Statex \hspace{4em} embedding\_vector $=$ embedding\,)
+    \State saved\_chunk $\leftarrow$ \texttt{\seqsplit{TextChunkRepository.create}}(chunk\_model)
     \Comment{Persist metadata in MongoDB}
     \State append saved\_chunk to created\_chunks
 \EndFor
 \If{\texttt{ChromaService} available}
     \State chroma\_entries $\leftarrow$ map \textit{created\_chunks} to \{\texttt{id}, \texttt{embedding}, \texttt{metadata}\}
-    \State \texttt{ChromaService.add\_embeddings}(project\_id, chroma\_entries)
+    \State \texttt{\seqsplit{ChromaService.add\_embeddings}}(project\_id, chroma\_entries)
 \Else
     \State Optionally store embeddings only within MongoDB fields
 \EndIf
 \State \Return created\_chunks
-\end{algorithmic}
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
 \textbf{Implementation highlights:}
 \begin{itemize}
-    \item \textbf{Embedding model:} \texttt{sentence-transformers/all-MiniLM-L6-v2} (see embedding service and verification scripts).
+    \item \textbf{Embedding model:} \texttt{\seqsplit{sentence-transformers/all-MiniLM-L6-v2}} (see embedding service and verification scripts).
     \item \textbf{Dual storage:} Metadata in MongoDB \texttt{text\_chunk} documents; vectors in ChromaDB via \texttt{\seqsplit{backend/app/services/chroma\_service.py}}.
     \item \textbf{Batch background tasks:} Celery jobs generate missing embeddings in \texttt{\seqsplit{backend/app/tasks/indexing.py}} (\texttt{batch\_generate\_embeddings\_task}).
 \end{itemize}
@@ -171,64 +175,71 @@ This step assembles a rich context from semantically similar chunks and optional
 
 \begin{algorithm}[H]
 \caption{AssembleRAGContext}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require query \textit{Q}, \textit{project\_id}, optional \textit{file\_id}, max\_chunks \textit{k}
 \Ensure \textit{context\_payload}: list of chunks, entities, scenes, relationships
-\State query\_embedding $\leftarrow$ \texttt{EmbeddingService.generate\_single\_embedding}(Q)
+\State query\_embedding $\leftarrow$ \texttt{\seqsplit{EmbeddingService.generate\_single\_embedding}}(Q)
 \If{\texttt{ChromaService} available}
-    \State vector\_hits $\leftarrow$ \texttt{ChromaService.search\_similar}(project\_id, query\_embedding, \texttt{n\_results} $=$ k)
+    \State vector\_hits $\leftarrow$ \texttt{\seqsplit{ChromaService.search\_similar}}(project\_id,
+    \Statex \hspace{4em} query\_embedding, \texttt{n\_results} $=$ k)
 \Else
-    \State vector\_hits $\leftarrow$ \texttt{TextChunkRepository.vector\_search}(project\_id, query\_embedding, \texttt{limit} $=$ k)
+    \State vector\_hits $\leftarrow$ \texttt{\seqsplit{TextChunkRepository.vector\_search}}(project\_id,
+    \Statex \hspace{4em} query\_embedding, \texttt{limit} $=$ k)
 \EndIf
 \State top\_chunks $\leftarrow$ convert \textit{vector\_hits} to chunk payloads (\texttt{id}, \texttt{content}, \texttt{score}, \texttt{file\_id}, \texttt{positions})
 \If{include\_entities}
-    \State entities $\leftarrow$ \texttt{EntityRepository.get\_by\_project}(project\_id)
-    \State entity\_matches $\leftarrow$ identify entities mentioned in \textit{top\_chunks} (\texttt{EntityExtractionService} or string matching)
+    \State entities $\leftarrow$ \texttt{\seqsplit{EntityRepository.get\_by\_project}}(project\_id)
+    \State entity\_matches $\leftarrow$ identify entities mentioned in \textit{top\_chunks}
+    \Statex \hspace{2em} (\texttt{EntityExtractionService} or string matching)
 \EndIf
 \If{include\_scenes}
-    \State scenes $\leftarrow$ \texttt{SceneRepository.find\_by\_project}(project\_id)
+    \State scenes $\leftarrow$ \texttt{\seqsplit{SceneRepository.find\_by\_project}}(project\_id)
     \State mapped\_scenes $\leftarrow$ map chunks to scenes when positions overlap or proximity matches
 \EndIf
 \If{include\_relationships}
-    \State relationships $\leftarrow$ \texttt{RelationshipRepository.find\_by\_project}(project\_id)
+    \State relationships $\leftarrow$ \texttt{\seqsplit{RelationshipRepository.find\_by\_project}}(project\_id)
 \EndIf
-\State context\_payload $\leftarrow$ \{\texttt{"chunks"}: top\_chunks, \texttt{"entities"}: entity\_matches, \texttt{"scenes"}: mapped\_scenes, \texttt{"relationships"}: relationships (filtered)\}
+\State context\_payload $\leftarrow$ \{\texttt{"chunks"}: top\_chunks, \texttt{"entities"}: entity\_matches,
+\Statex \hspace{2em} \texttt{"scenes"}: mapped\_scenes, \texttt{"relationships"}: relationships (filtered)\}
 \State \Return context\_payload
-\end{algorithmic}
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
 \textbf{Notes:}
 \begin{itemize}
-    \item \texttt{RAGContextService.assemble\_context} collects chunk-level results, enriches them with entity and scene metadata, and returns a compact context mapping suitable for prompt building (see \texttt{\seqsplit{backend/app/services/rag\_context\_service.py}}).
+    \item \texttt{\seqsplit{RAGContextService.assemble\_context}} collects chunk-level results, enriches them with entity and scene metadata, and returns a compact context mapping suitable for prompt building (see \texttt{\seqsplit{backend/app/services/rag\_context\_service.py}}).
     \item \texttt{SearchService} implements hybrid logic and fallback ordering (Chroma $\rightarrow$ MongoDB \texttt{vectorSearch}).
 \end{itemize}
 
 \subsection{Pseudocode: AI Response Generation (RAG + LLM Call)}
 
-This step orchestrates context assembly, prompt construction, LLM invocation, and persistence. It corresponds to \texttt{AIChatService.chat} and \texttt{CopilotService.generate\_suggestion}.
+This step orchestrates context assembly, prompt construction, LLM invocation, and persistence. It corresponds to \texttt{\seqsplit{AIChatService.chat}} and \texttt{\seqsplit{CopilotService.generate\_suggestion}}.
 
 \begin{algorithm}[H]
 \caption{GenerateAIResponseWithContext}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require \textit{user\_message}, \textit{project\_id}, optional \textit{file\_id}, \textit{user\_id}, \textit{max\_context\_chunks}
 \Ensure \textit{assistant\_message}
 \State \textbf{Step A: Assemble RAG context}
-\State context $\leftarrow$ \texttt{RAGContextService.assemble\_context}(\,\texttt{query} $=$ user\_message, \texttt{project\_id} $=$ project\_id, \texttt{file\_id} $=$ file\_id, \texttt{max\_chunks} $=$ max\_context\_chunks\,)
+\State context $\leftarrow$ \texttt{\seqsplit{RAGContextService.assemble\_context}}(\,\texttt{query} $=$ user\_message,
+\Statex \hspace{2em} \texttt{project\_id} $=$ project\_id, \texttt{file\_id} $=$ file\_id, \texttt{max\_chunks} $=$ max\_context\_chunks\,)
 \State \textbf{Step B: Format context into LLM prompt}
-\State formatted\_context $\leftarrow$ \texttt{RAGContextService.format\_context\_for\_llm}(context)
-\State system\_prompt $\leftarrow$ \texttt{AIChatService.SYSTEM\_PROMPT}
-\State conversation\_history $\leftarrow$ \texttt{ConversationRepository.get\_latest\_messages}(conversation\_id or new)
-\State llm\_messages $\leftarrow$ \texttt{build\_messages\_list}(system\_prompt, conversation\_history, user\_message, formatted\_context)
+\State formatted\_context $\leftarrow$ \texttt{\seqsplit{RAGContextService.format\_context\_for\_llm}}(context)
+\State system\_prompt $\leftarrow$ \texttt{\seqsplit{AIChatService.SYSTEM\_PROMPT}}
+\State conversation\_history $\leftarrow$ \texttt{\seqsplit{ConversationRepository.get\_latest\_messages}}(conversation\_id or new)
+\State llm\_messages $\leftarrow$ \texttt{\seqsplit{build\_messages\_list}}(system\_prompt, conversation\_history,
+\Statex \hspace{2em} user\_message, formatted\_context)
 \Comment{system message, recent assistant/user turns, current user message, appended context}
 \State \textbf{Step C: Call LLM}
-\State assistant\_content $\leftarrow$ \texttt{GroqService.generate}(\texttt{messages} $=$ llm\_messages, \texttt{max\_tokens} $= \dots$, \texttt{model} $= \dots$)
+\State assistant\_content $\leftarrow$ \texttt{GroqService.generate}(\texttt{messages} $=$ llm\_messages,
+\Statex \hspace{2em} \texttt{max\_tokens} $= \dots$, \texttt{model} $= \dots$)
 \State \textbf{Step D: Postprocess and store}
-\State cleaned $\leftarrow$ \texttt{clean\_text}(assistant\_content) \Comment{e.g., \texttt{CopilotService.\_clean\_suggestion}}
+\State cleaned $\leftarrow$ \texttt{clean\_text}(assistant\_content) \Comment{e.g., \texttt{\seqsplit{CopilotService.\_clean\_suggestion}}}
 \State \texttt{MessageRepository.save}(role $=$ \texttt{assistant}, content $=$ cleaned, context\_used $=$ context)
 \State update conversation metadata (message count, token usage, timestamps)
 \State \Return cleaned
-\end{algorithmic}
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
@@ -243,28 +254,29 @@ This step orchestrates context assembly, prompt construction, LLM invocation, an
 
 \begin{itemize}
     \item \textbf{Chunking complexity:} $O(n)$ in the number of sentences per document. Overlap increases effective storage but preserves local context for downstream retrieval.
-    \item \textbf{Embedding generation:} Dominated by model inference cost per chunk. Batch generation reduces overhead (indexing background tasks \texttt{batch\_generate\_missing\_embeddings}).
+    \item \textbf{Embedding generation:} Dominated by model inference cost per chunk. Batch generation reduces overhead (indexing background tasks \texttt{\seqsplit{batch\_generate\_missing\_embeddings}}).
     \item \textbf{Vector search:} ChromaDB uses efficient ANN (HNSW) with sub-linear query cost; fallback MongoDB vector aggregation may be slower for large collections.
     \item \textbf{Fault tolerance:}
     \begin{itemize}
         \item Embedding/model calls may fail due to transient network or provider issues; services use \texttt{try/catch} with sensible fallbacks (see embedding service and verify scripts).
         \item RAG assembly respects available services and degrades gracefully (ChromaDB optional; code falls back to MongoDB vector search when unavailable).
     \end{itemize}
-    \item \textbf{Reindexing \& incremental updates:} \texttt{TextExtractionService.reprocess\_file} deletes existing chunks and marks the file ready for reprocessing; batch background tasks handle any missing embeddings.
+    \item \textbf{Reindexing \& incremental updates:} \texttt{\seqsplit{TextExtractionService.reprocess\_file}} deletes existing chunks and marks the file ready for reprocessing; batch background tasks handle any missing embeddings.
 \end{itemize}
 
 \begin{algorithm}[H]
 \caption{ReprocessFileAndIncrementalUpdate}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require \textit{file\_id}, \textit{project\_id}
 \Ensure File is reindexed and embeddings regenerated as needed
-\State \texttt{TextChunkRepository.delete\_by\_file}(file\_id)
-\State \texttt{FileRepository.mark\_ready\_for\_processing}(file\_id)
-\State full\_text $\leftarrow$ \texttt{TextExtractionService.extract\_text\_from\_file}(file\_id)
-\State chunks $\leftarrow$ \texttt{TextExtractionService.chunk\_text}(project\_id, file\_id, full\_text, \texttt{max\_chunk\_size}, \texttt{overlap})
+\State \texttt{\seqsplit{TextChunkRepository.delete\_by\_file}}(file\_id)
+\State \texttt{\seqsplit{FileRepository.mark\_ready\_for\_processing}}(file\_id)
+\State full\_text $\leftarrow$ \texttt{\seqsplit{TextExtractionService.extract\_text\_from\_file}}(file\_id)
+\State chunks $\leftarrow$ \texttt{\seqsplit{TextExtractionService.chunk\_text}}(project\_id, file\_id,
+\Statex \hspace{2em} full\_text, \texttt{max\_chunk\_size}, \texttt{overlap})
 \State \texttt{TextChunkRepository.bulk\_insert}(chunks)
-\State enqueue \texttt{batch\_generate\_missing\_embeddings}(project\_id, file\_id)
-\end{algorithmic}
+\State enqueue \texttt{\seqsplit{batch\_generate\_missing\_embeddings}}(project\_id, file\_id)
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
@@ -521,17 +533,17 @@ The current iteration introduced comprehensive test coverage for the three new f
         \item \texttt{test\_generate\_dialogue\_suggestion\_rewrite}: Tests rewrite-mode suggestions for dialogue text
         \item \texttt{test\_generate\_suggestion\_validation\_error}: Verifies request validation for missing required fields
         \item \texttt{test\_generate\_suggestion\_unauthorized}: Ensures authentication is enforced
-        \item \texttt{test\_track\_accept\_and\_reject\_suggestion}: Tests suggestion acceptance/rejection tracking
+        \item \texttt{\seqsplit{test\_track\_accept\_and\_reject\_suggestion}}: Tests suggestion acceptance/rejection tracking
     \end{itemize}
     \item \textbf{Unit Tests (13 test cases):}
     \begin{itemize}
-        \item \texttt{test\_generate\_suggestion\_success}: Validates end-to-end suggestion generation flow
-        \item \texttt{test\_gather\_story\_context}: Tests character, location, and theme extraction from project context
-        \item \texttt{test\_analyze\_writing\_style}: Validates POV, tense, and formality detection
-        \item \texttt{test\_build\_prompt\_continue}: Tests prompt construction for continue mode with character details
-        \item \texttt{test\_build\_prompt\_includes\_dialogue\_tone\_and\_character\_profile\_details}: Verifies character attribute injection into prompts
-        \item \texttt{test\_analyze\_writing\_style\_detects\_informal\_tone\_from\_contractions}: Tests formality detection heuristics
-        \item \texttt{test\_gather\_story\_context\_keeps\_only\_mentioned\_characters\_for\_dialogue}: Validates context filtering logic
+        \item \texttt{\seqsplit{test\_generate\_suggestion\_success}}: Validates end-to-end suggestion generation flow
+        \item \texttt{\seqsplit{test\_gather\_story\_context}}: Tests character, location, and theme extraction from project context
+        \item \texttt{\seqsplit{test\_analyze\_writing\_style}}: Validates POV, tense, and formality detection
+        \item \texttt{\seqsplit{test\_build\_prompt\_continue}}: Tests prompt construction for continue mode with character details
+        \item \texttt{\seqsplit{test\_build\_prompt\_includes\_dialogue\_tone\_and\_character\_profile\_details}}: Verifies character attribute injection into prompts
+        \item \texttt{\seqsplit{test\_analyze\_writing\_style\_detects\_informal\_tone\_from\_contractions}}: Tests formality detection heuristics
+        \item \texttt{\seqsplit{test\_gather\_story\_context\_keeps\_only\_mentioned\_characters\_for\_dialogue}}: Validates context filtering logic
         \item Additional tests for complete/rewrite modes, error handling, and sentence extraction
     \end{itemize}
 \end{itemize}
@@ -705,8 +717,8 @@ Figure~\ref{fig:apiintegtest1} provides integration API test evidence.
 
 \begin{itemize}
     \item \textbf{Total integration tests:} ~70 (PHASE1 \& TESTING\_GUIDE) — reported as 100\% passing in the repo docs.
-    \item \textbf{Pytest configuration:} Tests discovered under \texttt{backend/tests/}; notable files include \texttt{test\_auth\_api.py}, \texttt{test\_projects\_api.py}, \texttt{test\_files\_api.py}, \texttt{test\_search\_api.py}, \texttt{test\_chat\_api.py}, \texttt{test\_integration\_workflows.py}, and \texttt{test\_health.py}.
-    \item \textbf{Notes:} Built from testing documentation (\texttt{WHITEBOX\_TESTING\_COMPLETE.md}, \texttt{PHASE1\_TESTING\_SUMMARY.md}, \texttt{TESTING\_GUIDE.md}, \texttt{TEST\_SUMMARY.md}) and concrete repo files (\texttt{conftest.py}, \texttt{pytest.ini}, run scripts). Exact counts may vary with updates.
+    \item \textbf{Pytest configuration:} Tests discovered under \texttt{backend/tests/}; notable files include \texttt{\seqsplit{test\_auth\_api.py}}, \texttt{\seqsplit{test\_projects\_api.py}}, \texttt{\seqsplit{test\_files\_api.py}}, \texttt{\seqsplit{test\_search\_api.py}}, \texttt{\seqsplit{test\_chat\_api.py}}, \texttt{\seqsplit{test\_integration\_workflows.py}}, and \texttt{\seqsplit{test\_health.py}}.
+    \item \textbf{Notes:} Built from testing documentation (\texttt{\seqsplit{WHITEBOX\_TESTING\_COMPLETE.md}}, \texttt{\seqsplit{PHASE1\_TESTING\_SUMMARY.md}}, \texttt{\seqsplit{TESTING\_GUIDE.md}}, \texttt{\seqsplit{TEST\_SUMMARY.md}}) and concrete repo files (\texttt{conftest.py}, \texttt{pytest.ini}, run scripts). Exact counts may vary with updates.
 \end{itemize}
 
 \begin{figure}[H]
@@ -795,13 +807,13 @@ The dialogue generation algorithm assembles multi-layered context (characters, s
 
 \begin{algorithm}[H]
 \caption{GenerateDialogueSuggestion}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require \textit{project\_id}, \textit{text\_before}, \textit{text\_after}, \textit{cursor\_position}, \textit{suggestion\_type}, \textit{max\_tokens}
 \Ensure \textit{suggestion\_response}: generated text, context used, confidence score
 \State \textbf{Step A: Extract immediate context}
 \State immediate\_context $\leftarrow$ last 500 characters of \textit{text\_before}
 \State \textbf{Step B: Gather story context}
-\State entities $\leftarrow$ \texttt{EntityRepository.get\_by\_project}(project\_id)
+\State entities $\leftarrow$ \texttt{\seqsplit{EntityRepository.get\_by\_project}}(project\_id)
 \State mentioned\_characters $\leftarrow$ [\,];\; mentioned\_locations $\leftarrow$ [\,];\; mentioned\_themes $\leftarrow$ [\,]
 \For{each entity in entities}
     \If{entity.name appears in immediate\_context (case-insensitive)}
@@ -817,8 +829,9 @@ The dialogue generation algorithm assembles multi-layered context (characters, s
 \State \textbf{Step C: Retrieve style samples via RAG}
 \State last\_sentences $\leftarrow$ extract last 1-2 sentences from immediate\_context
 \If{length(last\_sentences) $>$ 20}
-    \State query\_embedding $\leftarrow$ \texttt{EmbeddingService.generate\_single\_embedding}(last\_sentences)
-    \State similar\_chunks $\leftarrow$ \texttt{EmbeddingService.semantic\_search}(project\_id, last\_sentences, limit $=$ 3, min\_similarity $=$ 0.3)
+    \State query\_embedding $\leftarrow$ \texttt{\seqsplit{EmbeddingService.generate\_single\_embedding}}(last\_sentences)
+    \State similar\_chunks $\leftarrow$ \texttt{\seqsplit{EmbeddingService.semantic\_search}}(project\_id,
+    \Statex \hspace{4em} last\_sentences, limit $=$ 3, min\_similarity $=$ 0.3)
     \State style\_samples $\leftarrow$ [chunk.content[:200] for chunk in similar\_chunks]
 \EndIf
 \State \textbf{Step D: Analyze writing style}
@@ -829,15 +842,16 @@ The dialogue generation algorithm assembles multi-layered context (characters, s
 \State formality $\leftarrow$ detect\_formality(immediate\_context) \Comment{formal/informal based on contractions}
 \State style\_characteristics $\leftarrow$ \{avg\_sentence\_length, pov, tense, formality\}
 \State \textbf{Step E: Build specialized prompt}
-\State story\_context $\leftarrow$ \{mentioned\_characters[:5], mentioned\_locations[0], mentioned\_themes[:3], style\_samples, style\_characteristics\}
+\State story\_context $\leftarrow$ \{mentioned\_characters[:5], mentioned\_locations[0],
+\Statex \hspace{2em} mentioned\_themes[:3], style\_samples, style\_characteristics\}
 \State prompt $\leftarrow$ \texttt{\_build\_prompt}(suggestion\_type, text\_before, text\_after, story\_context)
 \Comment{Constructs prompt with character details, style guidelines, and examples}
 \State \textbf{Step F: Generate suggestion via LLM}
-\State raw\_suggestion $\leftarrow$ \texttt{GroqService.generate\_response}(prompt, temperature $=$ 0.7, max\_tokens)
+\State raw\_suggestion $\leftarrow$ \texttt{\seqsplit{GroqService.generate\_response}}(prompt, temperature $=$ 0.7, max\_tokens)
 \State \textbf{Step G: Clean and format output}
 \State cleaned\_suggestion $\leftarrow$ remove artifacts (e.g., "Here's the continuation:", quotes, ellipsis)
 \State \Return \{suggestion: cleaned\_suggestion, context\_used: story\_context, confidence: 0.8\}
-\end{algorithmic}
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
@@ -882,20 +896,21 @@ The character repository algorithm processes uploaded files, extracts character 
 
 \begin{algorithm}[H]
 \caption{ExtractAndPersistCharacterProfiles}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require \textit{file\_id}, \textit{project\_id}
 \Ensure Character entities created or updated in repository
 \State \textbf{Step A: Extract text and create chunks}
-\State file\_record $\leftarrow$ \texttt{FileRepository.get\_by\_id}(file\_id)
+\State file\_record $\leftarrow$ \texttt{\seqsplit{FileRepository.get\_by\_id}}(file\_id)
 \State text\_content $\leftarrow$ file\_record.text\_content
-\State chunks $\leftarrow$ \texttt{TextExtractionService.chunk\_text}(project\_id, file\_id, text\_content)
+\State chunks $\leftarrow$ \texttt{\seqsplit{TextExtractionService.chunk\_text}}(project\_id, file\_id, text\_content)
 \State \textbf{Step B: Extract entities from text}
-\State extracted\_entities $\leftarrow$ \texttt{EntityExtractionService.extract\_entities\_from\_text}(text\_content, project\_id, file\_id)
+\State extracted\_entities $\leftarrow$ \texttt{\seqsplit{EntityExtractionService.extract\_entities\_from\_text}}(
+\Statex \hspace{2em} text\_content, project\_id, file\_id)
 \Comment{Returns list of Entity objects with type, name, attributes, mention\_count, confidence\_score}
 \State \textbf{Step C: Process each extracted character entity}
 \For{each entity in extracted\_entities}
     \If{entity.type == CHARACTER}
-        \State existing\_entity $\leftarrow$ \texttt{EntityRepository.get\_by\_name}(project\_id, entity.name)
+        \State existing\_entity $\leftarrow$ \texttt{\seqsplit{EntityRepository.get\_by\_name}}(project\_id, entity.name)
         \If{existing\_entity exists}
             \State \textbf{Update existing character profile}
             \State new\_mention\_count $\leftarrow$ existing\_entity.mention\_count + entity.mention\_count
@@ -906,7 +921,7 @@ The character repository algorithm processes uploaded files, extracts character 
                 \Statex \hspace{4em} last\_mentioned: entity.last\_mentioned,
                 \Statex \hspace{4em} attributes: merge(existing\_entity.attributes, entity.attributes)
             \}
-            \State \texttt{EntityRepository.update\_by\_id}(existing\_entity.id, update\_payload)
+            \State \texttt{\seqsplit{EntityRepository.update\_by\_id}}(existing\_entity.id, update\_payload)
         \Else
             \State \textbf{Create new character profile}
             \State \texttt{EntityRepository.create}(entity)
@@ -914,12 +929,12 @@ The character repository algorithm processes uploaded files, extracts character 
     \EndIf
 \EndFor
 \State \textbf{Step D: Store text chunks with embeddings}
-\State \texttt{EmbeddingService.store\_text\_chunks\_with\_embeddings}(project\_id, file\_id, chunks)
+\State \texttt{\seqsplit{EmbeddingService.store\_text\_chunks\_with\_embeddings}}(project\_id, file\_id, chunks)
 \State \textbf{Step E: Discover relationships between characters}
-\State \texttt{RelationshipDiscoveryService.discover\_relationships\_for\_project}(project\_id)
+\State \texttt{\seqsplit{RelationshipDiscoveryService.discover\_relationships\_for\_project}}(project\_id)
 \State \textbf{Step F: Update file processing status}
 \State \texttt{FileRepository.update\_processing\_status}(file\_id, status $=$ "completed")
-\end{algorithmic}
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
@@ -963,7 +978,7 @@ The research integration algorithm orchestrates web search, result formatting, L
 
 \begin{algorithm}[H]
 \caption{PerformResearchAndSynthesize}
-\begin{algorithmic}[1]
+\small\begin{algorithmic}[1]
 \Require \textit{user\_query}, \textit{project\_id}, \textit{user\_id}, \textit{max\_sources}
 \Ensure \textit{research\_response}: AI answer, source list, conversation metadata
 \State \textbf{Step A: Validate web search availability}
@@ -991,15 +1006,15 @@ The research integration algorithm orchestrates web search, result formatting, L
     \Statex \hspace{4em} temperature $=$ 0.5,
     \Statex \hspace{4em} max\_tokens $=$ 2500)
 \State \textbf{Step G: Persist conversation}
-\State conversation $\leftarrow$ \texttt{AIChatService.\_create\_conversation}(user\_id, project\_id)
-\State \texttt{AIChatService.\_store\_message}(conversation.id, role $=$ USER, content $=$ user\_query)
-\State assistant\_msg $\leftarrow$ \texttt{AIChatService.\_store\_message}(
+\State conversation $\leftarrow$ \texttt{\seqsplit{AIChatService.\_create\_conversation}}(user\_id, project\_id)
+\State \texttt{\seqsplit{AIChatService.\_store\_message}}(conversation.id, role $=$ USER, content $=$ user\_query)
+\State assistant\_msg $\leftarrow$ \texttt{\seqsplit{AIChatService.\_store\_message}}(
     \Statex \hspace{4em} conversation.id,
     \Statex \hspace{4em} role $=$ ASSISTANT,
     \Statex \hspace{4em} content $=$ ai\_response,
     \Statex \hspace{4em} context\_used $=$ \{type: "web\_research", sources\_count: length(search\_results)\},
     \Statex \hspace{4em} model $=$ "llama-3.3-70b-versatile")
-\State \texttt{ConversationRepository.increment\_message\_count}(conversation.id)
+\State \texttt{\seqsplit{ConversationRepository.increment\_message\_count}}(conversation.id)
 \State \textbf{Step H: Build source items}
 \State sources $\leftarrow$ [SourceItem(title $=$ r.title, url $=$ r.url, snippet $=$ r.snippet[:200]) for r in search\_results]
 \State \textbf{Step I: Return research response}
@@ -1008,7 +1023,7 @@ The research integration algorithm orchestrates web search, result formatting, L
     \Statex \hspace{4em} message $=$ MessageResponse(assistant\_msg),
     \Statex \hspace{4em} sources $=$ sources,
     \Statex \hspace{4em} search\_query $=$ user\_query)
-\end{algorithmic}
+\end{algorithmic}\normalsize
 \end{algorithm}
 \FloatBarrier
 
