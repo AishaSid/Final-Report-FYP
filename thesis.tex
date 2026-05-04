@@ -17,6 +17,10 @@
 % Algorithms / Pseudocode
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+% Allow line breaking in algorithm text
+\usepackage{xspace}
+\usepackage{seqsplit}
+\algrenewcommand\algorithmiccomment[1]{\hfill\(\triangleright\) \small #1}
 
 % Fix bullet point spacing
 \usepackage{enumitem}

@@ -12,69 +12,75 @@ The system implements a Retrieval-Augmented Generation (RAG) pipeline to enable 
 
 The CoWriteIA implementation in this repository realizes a semantic indexing + RAG (retrieval-augmented generation) pipeline. The implemented components (and their primary locations in the codebase) are:
 
+{\small
 \begin{itemize}
     \item Document chunking and preprocessing
     \begin{itemize}
-        \item \texttt{backend/app/services/text\_extraction\_service.py :: TextExtractionService.chunk\_text / \_create\_text\_chunk}
+        \item \texttt{\seqsplit{backend/app/services/text\_extraction\_service.py}} :: \texttt{\seqsplit{TextExtractionService.chunk\_text}} / \texttt{\seqsplit{\_create\_text\_chunk}}
     \end{itemize}
     \item Embedding generation and vector storage
     \begin{itemize}
-        \item \texttt{backend/app/services/embedding\_service.py :: EmbeddingService.generate\_single\_embedding, generate\_embeddings, store\_text\_chunks\_with\_embeddings}
-        \item \texttt{backend/app/services/chroma\_service.py :: ChromaService.add\_embeddings, search\_similar}
-        \item \texttt{backend/app/repositories/text\_chunk\_repository.py :: update\_embedding, get\_chunks\_without\_embeddings, vector\_search / vector\_search\_chroma}
+        \item \texttt{\seqsplit{backend/app/services/embedding\_service.py}} :: \texttt{\seqsplit{EmbeddingService.generate\_single\_embedding}}, \texttt{\seqsplit{generate\_embeddings}}, \texttt{\seqsplit{store\_text\_chunks\_with\_embeddings}}
+        \item \texttt{\seqsplit{backend/app/services/chroma\_service.py}} :: \texttt{\seqsplit{ChromaService.add\_embeddings}}, \texttt{\seqsplit{search\_similar}}
+        \item \texttt{\seqsplit{backend/app/repositories/text\_chunk\_repository.py}} :: \texttt{\seqsplit{update\_embedding}}, \texttt{\seqsplit{get\_chunks\_without\_embeddings}}, \texttt{\seqsplit{vector\_search}} / \texttt{\seqsplit{vector\_search\_chroma}}
     \end{itemize}
     \item Context retrieval (semantic similarity)
     \begin{itemize}
-        \item \texttt{backend/app/services/rag\_context\_service.py :: RAGContextService.assemble\_context}
-        \item \texttt{backend/app/services/search\_service.py :: SearchService.semantic\_search, find\_similar\_content}
+        \item \texttt{\seqsplit{backend/app/services/rag\_context\_service.py}} :: \texttt{\seqsplit{RAGContextService.assemble\_context}}
+        \item \texttt{\seqsplit{backend/app/services/search\_service.py}} :: \texttt{\seqsplit{SearchService.semantic\_search}}, \texttt{\seqsplit{find\_similar\_content}}
     \end{itemize}
     \item AI response generation (RAG orchestration and assistant)
     \begin{itemize}
-        \item \texttt{backend/app/services/ai\_chat\_service.py :: AIChatService.chat}
-        \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.generate\_suggestion}
+        \item \texttt{\seqsplit{backend/app/services/ai\_chat\_service.py}} :: \texttt{\seqsplit{AIChatService.chat}}
+        \item \texttt{\seqsplit{backend/app/services/copilot\_service.py}} :: \texttt{\seqsplit{CopilotService.generate\_suggestion}}
     \end{itemize}
 \end{itemize}
+}
 
 The following subsections contain concise algorithm descriptions derived from the actual implementation and precise pseudocode that maps to the repository functions.
 
 \subsection{High-level Flow}
+{\small
 \begin{enumerate}
-    \item User uploads file via endpoints in \texttt{backend/app/api/v1/endpoints/files.py}.
+    \item User uploads file via endpoints in \texttt{\seqsplit{backend/app/api/v1/endpoints/files.py}}.
     \item File processing triggers text extraction and chunking:
     \begin{itemize}
-        \item \texttt{TextExtractionService.extract\_text\_from\_file(...)} and \texttt{TextExtractionService.chunk\_text(...)}
+        \item \texttt{\seqsplit{TextExtractionService.extract\_text\_from\_file(...)}} and \texttt{\seqsplit{TextExtractionService.chunk\_text(...)}}
         \item Chunks are created as \texttt{TextChunk} models and persisted via \texttt{TextChunkRepository}.
     \end{itemize}
     \item Embeddings are generated for chunks:
     \begin{itemize}
-        \item \texttt{EmbeddingService.generate\_embeddings(...)} / \texttt{generate\_single\_embedding(...)}
+        \item \texttt{\seqsplit{EmbeddingService.generate\_embeddings(...)}} / \texttt{\seqsplit{generate\_single\_embedding(...)}}
         \item Embeddings saved both in chunk metadata (MongoDB) and in ChromaDB via \texttt{ChromaService} when available.
     \end{itemize}
     \item Semantic search / RAG:
     \begin{itemize}
-        \item \texttt{RAGContextService.assemble\_context(...)} calls embedding/search services to retrieve top-$k$ chunks.
+        \item \texttt{\seqsplit{RAGContextService.assemble\_context(...)}} calls embedding/search services to retrieve top-$k$ chunks.
         \item \texttt{SearchService} handles hybrid/fallback logic (ChromaDB preferred, fallback to MongoDB vector search).
     \end{itemize}
     \item LLM generation:
     \begin{itemize}
-        \item \texttt{AIChatService.chat(...)} or \texttt{CopilotService.generate\_suggestion(...)} build a prompt from the retrieved context and call the configured LLM (\texttt{GroqService} or other).
+        \item \texttt{\seqsplit{AIChatService.chat(...)}} or \texttt{\seqsplit{CopilotService.generate\_suggestion(...)}} build a prompt from the retrieved context and call the configured LLM (\texttt{GroqService} or other).
     \end{itemize}
     \item Results returned to the client; metadata and analytics stored as needed.
 \end{enumerate}
+}
 
 \subsection*{Example short sequence (mapping code $\rightarrow$ runtime)}
+{\small
 \begin{enumerate}
-    \item User uploads file $\rightarrow$ API endpoint in \texttt{backend/app/api/v1/endpoints/files.py} triggers \texttt{process\_uploaded\_file}.
-    \item \texttt{process\_uploaded\_file} calls \texttt{TextExtractionService.chunk\_text} to create chunks.
-    \item Indexing background task (or immediate synchronous call) calls \texttt{EmbeddingService.generate\_embeddings} for chunks.
+    \item User uploads file $\rightarrow$ API endpoint in \texttt{\seqsplit{backend/app/api/v1/endpoints/files.py}} triggers \texttt{\seqsplit{process\_uploaded\_file}}.
+    \item \texttt{\seqsplit{process\_uploaded\_file}} calls \texttt{\seqsplit{TextExtractionService.chunk\_text}} to create chunks.
+    \item Indexing background task (or immediate synchronous call) calls \texttt{\seqsplit{EmbeddingService.generate\_embeddings}} for chunks.
     \item \texttt{EmbeddingService} stores embeddings via \texttt{TextChunkRepository} and \texttt{ChromaService}.
-    \item Later, user sends search/query $\rightarrow$ \texttt{RAGContextService.assemble\_context} retrieves top chunks using \texttt{ChromaService} or \texttt{SearchService}.
+    \item Later, user sends search/query $\rightarrow$ \texttt{\seqsplit{RAGContextService.assemble\_context}} retrieves top chunks using \texttt{ChromaService} or \texttt{SearchService}.
     \item \texttt{AIChatService.chat} builds prompt with context and calls \texttt{GroqService} (LLM); response persisted and returned.
 \end{enumerate}
+}
 
 \subsection{Pseudocode: Document Chunking and Preprocessing}
 
-The system splits extracted text into sentence-aware chunks within a target size and optionally applies overlap. Each chunk is materialized using the implementation in \texttt{backend/app/services/text\_extraction\_service.py}.
+The system splits extracted text into sentence-aware chunks within a target size and optionally applies overlap. Each chunk is materialized using the implementation in \texttt{\seqsplit{backend/app/services/text\_extraction\_service.py}}.
 
 \begin{algorithm}[H]
 \caption{ChunkTextAndCreateChunks}
@@ -155,8 +161,8 @@ This stage encodes chunked text into dense vectors and persists both the metadat
 \textbf{Implementation highlights:}
 \begin{itemize}
     \item \textbf{Embedding model:} \texttt{sentence-transformers/all-MiniLM-L6-v2} (see embedding service and verification scripts).
-    \item \textbf{Dual storage:} Metadata in MongoDB \texttt{text\_chunk} documents; vectors in ChromaDB via \texttt{backend/app/services/chroma\_service.py}.
-    \item \textbf{Batch background tasks:} Celery jobs generate missing embeddings in \texttt{backend/app/tasks/indexing.py} (\texttt{batch\_generate\_embeddings\_task}).
+    \item \textbf{Dual storage:} Metadata in MongoDB \texttt{text\_chunk} documents; vectors in ChromaDB via \texttt{\seqsplit{backend/app/services/chroma\_service.py}}.
+    \item \textbf{Batch background tasks:} Celery jobs generate missing embeddings in \texttt{\seqsplit{backend/app/tasks/indexing.py}} (\texttt{batch\_generate\_embeddings\_task}).
 \end{itemize}
 
 \subsection{Pseudocode: Context-aware Retrieval (RAG)}
@@ -194,7 +200,7 @@ This step assembles a rich context from semantically similar chunks and optional
 
 \textbf{Notes:}
 \begin{itemize}
-    \item \texttt{RAGContextService.assemble\_context} collects chunk-level results, enriches them with entity and scene metadata, and returns a compact context mapping suitable for prompt building (see \texttt{backend/app/services/rag\_context\_service.py}).
+    \item \texttt{RAGContextService.assemble\_context} collects chunk-level results, enriches them with entity and scene metadata, and returns a compact context mapping suitable for prompt building (see \texttt{\seqsplit{backend/app/services/rag\_context\_service.py}}).
     \item \texttt{SearchService} implements hybrid logic and fallback ordering (Chroma $\rightarrow$ MongoDB \texttt{vectorSearch}).
 \end{itemize}
 
@@ -229,7 +235,7 @@ This step orchestrates context assembly, prompt construction, LLM invocation, an
 \textbf{Implementation notes:}
 \begin{itemize}
     \item \texttt{AIChatService.chat} orchestrates assembling context, formatting prompts, invoking the LLM, and persisting messages.
-    \item \texttt{CopilotService.generate\_suggestion} targets inline assistance: it infers writing style from RAG results, calls the LLM, then returns a cleaned suggestion and the context used (see \texttt{backend/app/services/copilot\_service.py}).
+    \item \texttt{CopilotService.generate\_suggestion} targets inline assistance: it infers writing style from RAG results, calls the LLM, then returns a cleaned suggestion and the context used (see \texttt{\seqsplit{backend/app/services/copilot\_service.py}}).
 \end{itemize}
 
 \subsection*{Complexity, Reliability, and Practical Concerns}
@@ -263,29 +269,31 @@ This step orchestrates context assembly, prompt construction, LLM invocation, an
 \FloatBarrier
 
 \subsection*{Concrete File References (Key Implementation Points)}
+{\small
 \begin{itemize}
     \item \textbf{Text chunking and models}
     \begin{itemize}
-        \item \texttt{backend/app/services/text\_extraction\_service.py} :: \texttt{chunk\_text()}, \texttt{\_create\_text\_chunk()}, \texttt{\_split\_into\_sentences()}
-        \item \texttt{backend/app/repositories/text\_chunk\_repository.py} :: \texttt{create()}, \texttt{get\_by\_file()}, \texttt{get\_chunks\_without\_embeddings()}, \texttt{update\_embedding()}
+        \item \texttt{\seqsplit{backend/app/services/text\_extraction\_service.py}} :: \texttt{\seqsplit{chunk\_text()}}, \texttt{\seqsplit{\_create\_text\_chunk()}}, \texttt{\seqsplit{\_split\_into\_sentences()}}
+        \item \texttt{\seqsplit{backend/app/repositories/text\_chunk\_repository.py}} :: \texttt{\seqsplit{create()}}, \texttt{\seqsplit{get\_by\_file()}}, \texttt{\seqsplit{get\_chunks\_without\_embeddings()}}, \texttt{\seqsplit{update\_embedding()}}
     \end{itemize}
     \item \textbf{Embeddings and vector store}
     \begin{itemize}
-        \item \texttt{backend/app/services/embedding\_service.py} :: \texttt{generate\_single\_embedding()}, \texttt{generate\_embeddings()}, \texttt{store\_text\_chunks\_with\_embeddings()}, \texttt{find\_similar\_chunks()}
-        \item \texttt{backend/app/services/chroma\_service.py} :: \texttt{get\_or\_create\_collection()}, \texttt{add\_embeddings()}, \texttt{search\_similar()}
-        \item \texttt{backend/app/tasks/indexing.py} :: \texttt{index\_document\_task()}, \texttt{batch\_generate\_embeddings\_task()}
+        \item \texttt{\seqsplit{backend/app/services/embedding\_service.py}} :: \texttt{\seqsplit{generate\_single\_embedding()}}, \texttt{\seqsplit{generate\_embeddings()}}, \texttt{\seqsplit{store\_text\_chunks\_with\_embeddings()}}, \texttt{\seqsplit{find\_similar\_chunks()}}
+        \item \texttt{\seqsplit{backend/app/services/chroma\_service.py}} :: \texttt{\seqsplit{get\_or\_create\_collection()}}, \texttt{\seqsplit{add\_embeddings()}}, \texttt{\seqsplit{search\_similar()}}
+        \item \texttt{\seqsplit{backend/app/tasks/indexing.py}} :: \texttt{\seqsplit{index\_document\_task()}}, \texttt{\seqsplit{batch\_generate\_embeddings\_task()}}
     \end{itemize}
     \item \textbf{RAG and search}
     \begin{itemize}
-        \item \texttt{backend/app/services/rag\_context\_service.py} :: \texttt{assemble\_context()}, \texttt{format\_context\_for\_llm()}
-        \item \texttt{backend/app/services/search\_service.py} :: \texttt{semantic\_search()}, \texttt{find\_similar\_content()}, hybrid logic
+        \item \texttt{\seqsplit{backend/app/services/rag\_context\_service.py}} :: \texttt{\seqsplit{assemble\_context()}}, \texttt{\seqsplit{format\_context\_for\_llm()}}
+        \item \texttt{\seqsplit{backend/app/services/search\_service.py}} :: \texttt{\seqsplit{semantic\_search()}}, \texttt{\seqsplit{find\_similar\_content()}}, hybrid logic
     \end{itemize}
     \item \textbf{LLM orchestration and assistants}
     \begin{itemize}
-        \item \texttt{backend/app/services/ai\_chat\_service.py} :: \texttt{chat()}
-        \item \texttt{backend/app/services/copilot\_service.py} :: \texttt{generate\_suggestion()}, \texttt{\_gather\_story\_context()}
+        \item \texttt{\seqsplit{backend/app/services/ai\_chat\_service.py}} :: \texttt{\seqsplit{chat()}}
+        \item \texttt{\seqsplit{backend/app/services/copilot\_service.py}} :: \texttt{\seqsplit{generate\_suggestion()}}, \texttt{\seqsplit{\_gather\_story\_context()}}
     \end{itemize}
 \end{itemize}
+}
 
 % See Appendix E for call signatures
 See Appendix~\ref{sec:appendix-e-pseudo-api} for pseudo-API call signatures.
@@ -490,12 +498,12 @@ Boundary conditions, invalid inputs, missing data, and incorrect configurations 
 \begin{tabular}{|p{4cm}|p{3cm}|p{4cm}|}
 \hline
 \textbf{Category} & \textbf{Count} & \textbf{Notes} \\ \hline
-Total Unit Tests Executed & 70 & Across all modules \\ \hline
-Passing Tests & 64 &  \\ \hline
-Failed Tests & 6 & Require fixes/mocking updates \\ \hline
-Overall Pass Rate & 91\% & Stable with minor issues \\ \hline
+Total Backend Tests Executed & 231 & Integration + Unit across all modules \\ \hline
+Passing Tests & 231 &  \\ \hline
+Failed Tests & 0 & All tests passing \\ \hline
+Overall Pass Rate & 100\% & Fully stable \\ \hline
 \end{tabular}
-\caption{Overall Unit Testing Summary}
+\caption{Overall Backend Testing Summary}
 \end{table}
 
 Unit test execution evidence is shown in Figures~\ref{fig:wboxutest1} to~\ref{fig:wboxutest4}.
@@ -615,7 +623,7 @@ Integration API Tests & ~70 & All API endpoints \\ \hline
 Unit Service Tests & ~90 & Core services \\ \hline
 Unit Repository Tests & ~30 & Data access layer \\ \hline
 Unit Model Tests & ~41 & Data models \\ \hline
-\textbf{Backend Pass Rate} & \textbf{91\%} & 210/231 passing \\ \hline
+\textbf{Backend Pass Rate} & \textbf{100\%} & 231/231 passing \\ \hline
 \textbf{Backend Code Coverage} & \textbf{32\%} & Statement coverage \\ \hline
 \end{tabular}
 \caption{Comprehensive Testing Statistics}
@@ -724,7 +732,7 @@ The frontend testing infrastructure is configured using Jest and React Testing L
 \textbf{Frontend Coverage Configuration:}
 
 \begin{itemize}
-    \item \textbf{Test Patterns:} \texttt{src/**/__tests__/**/*.{js,jsx,ts,tsx}} and \texttt{src/**/*.{test,spec}.{js,jsx,ts,tsx}}
+    \item \textbf{Test Patterns:} Test files matching \texttt{src/**/\_\_tests\_\_/**/*} and \texttt{src/**/*.test.*} patterns
     \item \textbf{Coverage Exclusions:} TypeScript definition files, layout components, global CSS
     \item \textbf{Coverage Output:} HTML reports generated in \texttt{frontend\_coverage/} directory
     \item \textbf{Setup Files:} \texttt{jest.setup.js} for test environment configuration
@@ -771,13 +779,15 @@ The dialogue generation system operates as an extension of the \texttt{CopilotSe
 \end{itemize}
 
 \textbf{Key implementation components:}
+{\small
 \begin{itemize}
-    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.generate\_suggestion}
-    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.\_gather\_story\_context}
-    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.\_analyze\_writing\_style}
-    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.\_build\_prompt}
-    \item \texttt{backend/app/api/v1/endpoints/copilot.py :: generate\_suggestion}
+    \item \texttt{\seqsplit{backend/app/services/copilot\_service.py}} :: \texttt{\seqsplit{CopilotService.generate\_suggestion}}
+    \item \texttt{\seqsplit{backend/app/services/copilot\_service.py}} :: \texttt{\seqsplit{CopilotService.\_gather\_story\_context}}
+    \item \texttt{\seqsplit{backend/app/services/copilot\_service.py}} :: \texttt{\seqsplit{CopilotService.\_analyze\_writing\_style}}
+    \item \texttt{\seqsplit{backend/app/services/copilot\_service.py}} :: \texttt{\seqsplit{CopilotService.\_build\_prompt}}
+    \item \texttt{\seqsplit{backend/app/api/v1/endpoints/copilot.py}} :: \texttt{\seqsplit{generate\_suggestion}}
 \end{itemize}
+}
 
 \subsubsection{Algorithm: Context-Aware Dialogue Generation}
 
@@ -856,13 +866,15 @@ The character repository system extends the entity extraction pipeline with char
 \end{itemize}
 
 \textbf{Key implementation components:}
+{\small
 \begin{itemize}
-    \item \texttt{backend/app/models/entity.py :: Entity} (with EntityType.CHARACTER)
-    \item \texttt{backend/app/repositories/entity\_repository.py :: EntityRepository.get\_by\_project\_and\_type}
-    \item \texttt{backend/app/api/v1/endpoints/genres.py :: list\_project\_entities} (with entity\_type filter)
-    \item \texttt{backend/app/api/v1/endpoints/files.py :: process\_uploaded\_file} (character extraction and update logic)
-    \item \texttt{backend/app/services/entity\_extraction\_service.py :: EntityExtractionService.extract\_entities\_from\_text}
+    \item \texttt{\seqsplit{backend/app/models/entity.py}} :: \texttt{Entity} (with \texttt{EntityType.CHARACTER})
+    \item \texttt{\seqsplit{backend/app/repositories/entity\_repository.py}} :: \texttt{\seqsplit{EntityRepository.get\_by\_project\_and\_type}}
+    \item \texttt{\seqsplit{backend/app/api/v1/endpoints/genres.py}} :: \texttt{\seqsplit{list\_project\_entities}} (with entity\_type filter)
+    \item \texttt{\seqsplit{backend/app/api/v1/endpoints/files.py}} :: \texttt{\seqsplit{process\_uploaded\_file}} (character extraction and update logic)
+    \item \texttt{\seqsplit{backend/app/services/entity\_extraction\_service.py}} :: \texttt{\seqsplit{EntityExtractionService.extract\_entities\_from\_text}}
 \end{itemize}
+}
 
 \subsubsection{Algorithm: Character Profile Extraction and Update}
 
@@ -936,12 +948,14 @@ The research integration system combines web search with LLM-based synthesis:
 \end{itemize}
 
 \textbf{Key implementation components:}
+{\small
 \begin{itemize}
-    \item \texttt{backend/app/services/web\_search\_service.py :: WebSearchService.search}
-    \item \texttt{backend/app/services/web\_search\_service.py :: WebSearchService.format\_results\_for\_llm}
-    \item \texttt{backend/app/api/v1/endpoints/research.py :: research\_chat}
-    \item \texttt{backend/app/models/conversation.py :: ResearchRequest, ResearchResponse, SourceItem}
+    \item \texttt{\seqsplit{backend/app/services/web\_search\_service.py}} :: \texttt{\seqsplit{WebSearchService.search}}
+    \item \texttt{\seqsplit{backend/app/services/web\_search\_service.py}} :: \texttt{\seqsplit{WebSearchService.format\_results\_for\_llm}}
+    \item \texttt{\seqsplit{backend/app/api/v1/endpoints/research.py}} :: \texttt{\seqsplit{research\_chat}}
+    \item \texttt{\seqsplit{backend/app/models/conversation.py}} :: \texttt{\seqsplit{ResearchRequest}}, \texttt{\seqsplit{ResearchResponse}}, \texttt{\seqsplit{SourceItem}}
 \end{itemize}
+}
 
 \subsubsection{Algorithm: Web Research and AI Synthesis}
 

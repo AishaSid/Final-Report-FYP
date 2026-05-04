@@ -133,13 +133,15 @@ User selects the ``Generate Content'' option within the writing interface. \\ \h
 \section{Appendix E: Pseudo-API Snippets (Call Signatures)}
 \label{sec:appendix-e-pseudo-api}
 
+{\small
 \begin{itemize}
-    \item \texttt{TextExtractionService.chunk\_text(file\_id: str, project\_id: str, text: str, start\_position: int = 0, start\_chunk\_index: int = 0) -> List[TextChunk]}
-    \item \texttt{EmbeddingService.generate\_single\_embedding(text: str) -> List[float]}
-    \item \texttt{EmbeddingService.generate\_embeddings(texts: List[str]) -> List[List[float]]}
-    \item \texttt{EmbeddingService.store\_text\_chunks\_with\_embeddings(file\_id: str, project\_id: str, chunk\_data: List[Dict]) -> List[TextChunk]}
-    \item \texttt{ChromaService.add\_embeddings(project\_id: str, entries: List[Dict]) -> None}
-    \item \texttt{ChromaService.search\_similar(project\_id: str, query\_embedding: List[float], n\_results: int) -> List[Dict]}
-    \item \texttt{RAGContextService.assemble\_context(query: str, project\_id: str, file\_id: Optional[str] = None, max\_chunks: int = 5) -> Dict}
-    \item \texttt{AIChatService.chat(request: ChatRequest, user\_id: str) -> ChatResponse}
+    \item \texttt{TextExtractionService.chunk\_text(file\_id: str,} \texttt{project\_id: str, text: str, start\_position: int = 0,} \texttt{start\_chunk\_index: int = 0) -> List[TextChunk]}
+    \item \texttt{EmbeddingService.generate\_single\_embedding(text: str)} \texttt{-> List[float]}
+    \item \texttt{EmbeddingService.generate\_embeddings(texts: List[str])} \texttt{-> List[List[float]]}
+    \item \texttt{EmbeddingService.store\_text\_chunks\_with\_embeddings(} \texttt{file\_id: str, project\_id: str, chunk\_data: List[Dict])} \texttt{-> List[TextChunk]}
+    \item \texttt{ChromaService.add\_embeddings(project\_id: str,} \texttt{entries: List[Dict]) -> None}
+    \item \texttt{ChromaService.search\_similar(project\_id: str,} \texttt{query\_embedding: List[float], n\_results: int)} \texttt{-> List[Dict]}
+    \item \texttt{RAGContextService.assemble\_context(query: str,} \texttt{project\_id: str, file\_id: Optional[str] = None,} \texttt{max\_chunks: int = 5) -> Dict}
+    \item \texttt{AIChatService.chat(request: ChatRequest,} \texttt{user\_id: str) -> ChatResponse}
 \end{itemize}
+}
