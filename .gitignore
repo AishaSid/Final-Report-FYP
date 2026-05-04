@@ -1,3 +1,5 @@
+cwrite_main_code/
+
 # LaTeX build artifacts
 *.aux
 *.bbl

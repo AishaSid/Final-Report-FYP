@@ -540,3 +540,261 @@ Figure~\ref{fig:apiintegtest1} provides integration API test evidence.
     \label{fig:apiintegtest1}
 \end{figure}
 
+\section{Current Iteration Features}
+\label{sec:current-iteration-features}
+
+This section describes three major features implemented in the current iteration: Dialogue Generation, Character Repository, and Research Integration Agent. These features extend the core RAG pipeline with specialized capabilities for creative writing assistance.
+
+\subsection{Dialogue Generation Module}
+\label{subsec:dialogue-generation}
+
+The Dialogue Generation module enhances the copilot service with context-aware dialogue suggestions that maintain character voice consistency and narrative coherence. This module integrates character profiles, writing style analysis, and RAG-based context retrieval to generate authentic dialogue continuations.
+
+\subsubsection{Module Summary}
+
+The dialogue generation system operates as an extension of the \texttt{CopilotService} and provides:
+
+\begin{itemize}
+    \item \textbf{Character-aware suggestions:} Retrieves character profiles and attributes from the entity repository to ensure dialogue matches established character voices and personality traits.
+    \item \textbf{Style-adaptive generation:} Analyzes the author's writing style (POV, tense, formality, sentence structure) and generates suggestions that match the existing narrative voice.
+    \item \textbf{Context-aware prompting:} Uses RAG to retrieve similar text chunks and recent story events to inform dialogue generation with relevant narrative context.
+    \item \textbf{Multi-mode support:} Supports continue, complete, and rewrite suggestion types for flexible writing assistance.
+\end{itemize}
+
+\textbf{Key implementation components:}
+\begin{itemize}
+    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.generate\_suggestion}
+    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.\_gather\_story\_context}
+    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.\_analyze\_writing\_style}
+    \item \texttt{backend/app/services/copilot\_service.py :: CopilotService.\_build\_prompt}
+    \item \texttt{backend/app/api/v1/endpoints/copilot.py :: generate\_suggestion}
+\end{itemize}
+
+\subsubsection{Algorithm: Context-Aware Dialogue Generation}
+
+The dialogue generation algorithm assembles multi-layered context (characters, style, recent events) and constructs specialized prompts for the LLM to generate stylistically consistent dialogue.
+
+\begin{algorithm}[H]
+\caption{GenerateDialogueSuggestion}
+\begin{algorithmic}[1]
+\Require \textit{project\_id}, \textit{text\_before}, \textit{text\_after}, \textit{cursor\_position}, \textit{suggestion\_type}, \textit{max\_tokens}
+\Ensure \textit{suggestion\_response}: generated text, context used, confidence score
+\State \textbf{Step A: Extract immediate context}
+\State immediate\_context $\leftarrow$ last 500 characters of \textit{text\_before}
+\State \textbf{Step B: Gather story context}
+\State entities $\leftarrow$ \texttt{EntityRepository.get\_by\_project}(project\_id)
+\State mentioned\_characters $\leftarrow$ [\,];\; mentioned\_locations $\leftarrow$ [\,];\; mentioned\_themes $\leftarrow$ [\,]
+\For{each entity in entities}
+    \If{entity.name appears in immediate\_context (case-insensitive)}
+        \If{entity.type == CHARACTER}
+            \State append \{name, aliases, attributes\} to mentioned\_characters
+        \ElsIf{entity.type == LOCATION}
+            \State append \{name, attributes\} to mentioned\_locations
+        \ElsIf{entity.type == THEME}
+            \State append \{name\} to mentioned\_themes
+        \EndIf
+    \EndIf
+\EndFor
+\State \textbf{Step C: Retrieve style samples via RAG}
+\State last\_sentences $\leftarrow$ extract last 1-2 sentences from immediate\_context
+\If{length(last\_sentences) $>$ 20}
+    \State query\_embedding $\leftarrow$ \texttt{EmbeddingService.generate\_single\_embedding}(last\_sentences)
+    \State similar\_chunks $\leftarrow$ \texttt{EmbeddingService.semantic\_search}(project\_id, last\_sentences, limit $=$ 3, min\_similarity $=$ 0.3)
+    \State style\_samples $\leftarrow$ [chunk.content[:200] for chunk in similar\_chunks]
+\EndIf
+\State \textbf{Step D: Analyze writing style}
+\State sentences $\leftarrow$ split immediate\_context by '.'
+\State avg\_sentence\_length $\leftarrow$ mean word count per sentence
+\State pov $\leftarrow$ detect\_pov(immediate\_context) \Comment{first/second/third person}
+\State tense $\leftarrow$ detect\_tense(immediate\_context) \Comment{past/present}
+\State formality $\leftarrow$ detect\_formality(immediate\_context) \Comment{formal/informal based on contractions}
+\State style\_characteristics $\leftarrow$ \{avg\_sentence\_length, pov, tense, formality\}
+\State \textbf{Step E: Build specialized prompt}
+\State story\_context $\leftarrow$ \{mentioned\_characters[:5], mentioned\_locations[0], mentioned\_themes[:3], style\_samples, style\_characteristics\}
+\State prompt $\leftarrow$ \texttt{\_build\_prompt}(suggestion\_type, text\_before, text\_after, story\_context)
+\Comment{Constructs prompt with character details, style guidelines, and examples}
+\State \textbf{Step F: Generate suggestion via LLM}
+\State raw\_suggestion $\leftarrow$ \texttt{GroqService.generate\_response}(prompt, temperature $=$ 0.7, max\_tokens)
+\State \textbf{Step G: Clean and format output}
+\State cleaned\_suggestion $\leftarrow$ remove artifacts (e.g., "Here's the continuation:", quotes, ellipsis)
+\State \Return \{suggestion: cleaned\_suggestion, context\_used: story\_context, confidence: 0.8\}
+\end{algorithmic}
+\end{algorithm}
+\FloatBarrier
+
+\textbf{Implementation notes:}
+\begin{itemize}
+    \item The prompt construction varies by suggestion type (continue, complete, rewrite) and includes explicit instructions to match the author's voice, character consistency, and narrative style.
+    \item Character attributes (personality traits, emotional tendencies, narrative role) are injected into the prompt to guide dialogue generation.
+    \item Style analysis uses heuristics for POV detection (presence of "I", "you"), tense detection (past vs. present tense verbs), and formality (contraction usage).
+    \item RAG-based style samples provide concrete examples of the author's writing patterns for the LLM to emulate.
+\end{itemize}
+
+\subsection{Character Repository Module}
+\label{subsec:character-repository}
+
+The Character Repository module provides persistent storage and retrieval of character profiles extracted from uploaded documents. Characters are stored as entities with rich attributes including personality traits, emotional tendencies, and narrative roles, enabling character-aware writing assistance.
+
+\subsubsection{Module Summary}
+
+The character repository system extends the entity extraction pipeline with character-specific functionality:
+
+\begin{itemize}
+    \item \textbf{Character profile persistence:} Stores character entities with structured attributes (personality traits, emotional tendencies, narrative role) in the entity model.
+    \item \textbf{Project-scoped retrieval:} Provides API endpoints to list all characters within a project with optional type filtering.
+    \item \textbf{Incremental updates:} Updates existing character profiles when new mentions are detected during file processing, merging mention counts and confidence scores.
+    \item \textbf{Entity linking:} Links character mentions to text chunks and position indices for context-aware retrieval.
+\end{itemize}
+
+\textbf{Key implementation components:}
+\begin{itemize}
+    \item \texttt{backend/app/models/entity.py :: Entity} (with EntityType.CHARACTER)
+    \item \texttt{backend/app/repositories/entity\_repository.py :: EntityRepository.get\_by\_project\_and\_type}
+    \item \texttt{backend/app/api/v1/endpoints/genres.py :: list\_project\_entities} (with entity\_type filter)
+    \item \texttt{backend/app/api/v1/endpoints/files.py :: process\_uploaded\_file} (character extraction and update logic)
+    \item \texttt{backend/app/services/entity\_extraction\_service.py :: EntityExtractionService.extract\_entities\_from\_text}
+\end{itemize}
+
+\subsubsection{Algorithm: Character Profile Extraction and Update}
+
+The character repository algorithm processes uploaded files, extracts character mentions, and either creates new character profiles or updates existing ones with incremental metadata.
+
+\begin{algorithm}[H]
+\caption{ExtractAndPersistCharacterProfiles}
+\begin{algorithmic}[1]
+\Require \textit{file\_id}, \textit{project\_id}
+\Ensure Character entities created or updated in repository
+\State \textbf{Step A: Extract text and create chunks}
+\State file\_record $\leftarrow$ \texttt{FileRepository.get\_by\_id}(file\_id)
+\State text\_content $\leftarrow$ file\_record.text\_content
+\State chunks $\leftarrow$ \texttt{TextExtractionService.chunk\_text}(project\_id, file\_id, text\_content)
+\State \textbf{Step B: Extract entities from text}
+\State extracted\_entities $\leftarrow$ \texttt{EntityExtractionService.extract\_entities\_from\_text}(text\_content, project\_id, file\_id)
+\Comment{Returns list of Entity objects with type, name, attributes, mention\_count, confidence\_score}
+\State \textbf{Step C: Process each extracted character entity}
+\For{each entity in extracted\_entities}
+    \If{entity.type == CHARACTER}
+        \State existing\_entity $\leftarrow$ \texttt{EntityRepository.get\_by\_name}(project\_id, entity.name)
+        \If{existing\_entity exists}
+            \State \textbf{Update existing character profile}
+            \State new\_mention\_count $\leftarrow$ existing\_entity.mention\_count + entity.mention\_count
+            \State new\_confidence $\leftarrow$ (existing\_entity.confidence\_score + entity.confidence\_score) / 2
+            \State update\_payload $\leftarrow$ \{
+                \Statex \hspace{4em} mention\_count: new\_mention\_count,
+                \Statex \hspace{4em} confidence\_score: new\_confidence,
+                \Statex \hspace{4em} last\_mentioned: entity.last\_mentioned,
+                \Statex \hspace{4em} attributes: merge(existing\_entity.attributes, entity.attributes)
+            \}
+            \State \texttt{EntityRepository.update\_by\_id}(existing\_entity.id, update\_payload)
+        \Else
+            \State \textbf{Create new character profile}
+            \State \texttt{EntityRepository.create}(entity)
+        \EndIf
+    \EndIf
+\EndFor
+\State \textbf{Step D: Store text chunks with embeddings}
+\State \texttt{EmbeddingService.store\_text\_chunks\_with\_embeddings}(project\_id, file\_id, chunks)
+\State \textbf{Step E: Discover relationships between characters}
+\State \texttt{RelationshipDiscoveryService.discover\_relationships\_for\_project}(project\_id)
+\State \textbf{Step F: Update file processing status}
+\State \texttt{FileRepository.update\_processing\_status}(file\_id, status $=$ "completed")
+\end{algorithmic}
+\end{algorithm}
+\FloatBarrier
+
+\textbf{Implementation notes:}
+\begin{itemize}
+    \item Character attributes are stored in a flexible \texttt{attributes} dictionary field within the Entity model, supporting arbitrary key-value pairs (e.g., personality\_traits: ["witty", "guarded"], narrative\_role: "protagonist").
+    \item The \texttt{get\_by\_project\_and\_type} repository method supports pagination (skip, limit) and type filtering for efficient character listing.
+    \item Mention count and confidence score are incrementally updated when the same character is detected in multiple files or processing runs.
+    \item Character profiles are linked to relationship entities for narrative graph construction.
+\end{itemize}
+
+\subsection{Research Integration Agent Module}
+\label{subsec:research-integration}
+
+The Research Integration Agent provides real-time web search capabilities integrated with AI-powered synthesis, enabling writers to research topics and receive contextually relevant, cited information without leaving the writing environment.
+
+\subsubsection{Module Summary}
+
+The research integration system combines web search with LLM-based synthesis:
+
+\begin{itemize}
+    \item \textbf{Real-time web search:} Integrates with Tavily Search API to retrieve current web information based on natural language queries.
+    \item \textbf{AI-powered synthesis:} Uses Groq LLM to synthesize search results into coherent, writer-focused answers with inline source citations.
+    \item \textbf{Source attribution:} Returns structured source metadata (title, URL, snippet) alongside AI-generated answers for verification and citation.
+    \item \textbf{Conversation persistence:} Stores research queries and responses in conversation history for project context continuity.
+\end{itemize}
+
+\textbf{Key implementation components:}
+\begin{itemize}
+    \item \texttt{backend/app/services/web\_search\_service.py :: WebSearchService.search}
+    \item \texttt{backend/app/services/web\_search\_service.py :: WebSearchService.format\_results\_for\_llm}
+    \item \texttt{backend/app/api/v1/endpoints/research.py :: research\_chat}
+    \item \texttt{backend/app/models/conversation.py :: ResearchRequest, ResearchResponse, SourceItem}
+\end{itemize}
+
+\subsubsection{Algorithm: Web Research and AI Synthesis}
+
+The research integration algorithm orchestrates web search, result formatting, LLM synthesis, and conversation persistence to provide cited, contextual answers.
+
+\begin{algorithm}[H]
+\caption{PerformResearchAndSynthesize}
+\begin{algorithmic}[1]
+\Require \textit{user\_query}, \textit{project\_id}, \textit{user\_id}, \textit{max\_sources}
+\Ensure \textit{research\_response}: AI answer, source list, conversation metadata
+\State \textbf{Step A: Validate web search availability}
+\If{\texttt{WebSearchService.is\_available()} == False}
+    \State \Return HTTPException(503, "Web search service not configured")
+\EndIf
+\State \textbf{Step B: Execute web search}
+\State search\_results $\leftarrow$ \texttt{WebSearchService.search}(
+    \Statex \hspace{4em} query $=$ user\_query,
+    \Statex \hspace{4em} max\_results $=$ max\_sources,
+    \Statex \hspace{4em} search\_depth $=$ "basic")
+\Comment{Returns list of SearchResult objects with title, url, snippet, score}
+\State \textbf{Step C: Format search results as LLM context}
+\State search\_context $\leftarrow$ \texttt{WebSearchService.format\_results\_for\_llm}(search\_results)
+\Comment{Formats as "[Source 1] Title\textbackslash nURL: ...\textbackslash nSnippet\textbackslash n"}
+\State \textbf{Step D: Build research system prompt}
+\State system\_prompt $\leftarrow$ "You are an intelligent research assistant for writers. Synthesize information from search results, cite sources as [Source N], focus on actionable information."
+\State \textbf{Step E: Construct LLM messages}
+\State llm\_messages $\leftarrow$ [
+    \Statex \hspace{4em} \{role: "system", content: system\_prompt\},
+    \Statex \hspace{4em} \{role: "user", content: search\_context + "\textbackslash n\textbackslash nUser Question: " + user\_query + "\textbackslash n\textbackslash nPlease provide a comprehensive answer based on the search results above."\}]
+\State \textbf{Step F: Generate AI synthesis}
+\State ai\_response $\leftarrow$ \texttt{GroqService.continue\_conversation}(
+    \Statex \hspace{4em} messages $=$ llm\_messages,
+    \Statex \hspace{4em} temperature $=$ 0.5,
+    \Statex \hspace{4em} max\_tokens $=$ 2500)
+\State \textbf{Step G: Persist conversation}
+\State conversation $\leftarrow$ \texttt{AIChatService.\_create\_conversation}(user\_id, project\_id)
+\State \texttt{AIChatService.\_store\_message}(conversation.id, role $=$ USER, content $=$ user\_query)
+\State assistant\_msg $\leftarrow$ \texttt{AIChatService.\_store\_message}(
+    \Statex \hspace{4em} conversation.id,
+    \Statex \hspace{4em} role $=$ ASSISTANT,
+    \Statex \hspace{4em} content $=$ ai\_response,
+    \Statex \hspace{4em} context\_used $=$ \{type: "web\_research", sources\_count: length(search\_results)\},
+    \Statex \hspace{4em} model $=$ "llama-3.3-70b-versatile")
+\State \texttt{ConversationRepository.increment\_message\_count}(conversation.id)
+\State \textbf{Step H: Build source items}
+\State sources $\leftarrow$ [SourceItem(title $=$ r.title, url $=$ r.url, snippet $=$ r.snippet[:200]) for r in search\_results]
+\State \textbf{Step I: Return research response}
+\State \Return ResearchResponse(
+    \Statex \hspace{4em} conversation\_id $=$ conversation.id,
+    \Statex \hspace{4em} message $=$ MessageResponse(assistant\_msg),
+    \Statex \hspace{4em} sources $=$ sources,
+    \Statex \hspace{4em} search\_query $=$ user\_query)
+\end{algorithmic}
+\end{algorithm}
+\FloatBarrier
+
+\textbf{Implementation notes:}
+\begin{itemize}
+    \item The Tavily Search API is configured via \texttt{TAVILY\_API\_KEY} environment variable; the service gracefully degrades if unavailable.
+    \item Search results are limited to 1-10 sources (configurable via \texttt{max\_sources} parameter) to balance context richness and LLM token limits.
+    \item The research system prompt explicitly instructs the LLM to cite sources using [Source N] notation and avoid fabricating information.
+    \item Conversation persistence enables research history tracking and potential future features like research session resumption.
+    \item Source snippets are truncated to 200 characters in the response payload for UI display efficiency.
+\end{itemize}
+
