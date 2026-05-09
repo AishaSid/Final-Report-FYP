@@ -37,6 +37,7 @@ distclean:
 		-name "*.aux" -o -name "*.blg" -o -name "*.brf" -o \
 		-name "*.end" -o -name "*.fls" -o -name "*.log" -o \
 		-name "*.out" -o -name "*.texshop" -o -name "*.fdb_latexmk" -o \
+		-name "*.lof" -o -name "*.lot" -o -name "*.toc" -o \
 		-name "*.glo" -o -name "*converted-to.pdf" \
 	\) -delete
 
