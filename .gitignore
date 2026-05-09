@@ -14,7 +14,7 @@ cwrite_main_code/
 *.synctex.gz
 
 # Generated PDFs (build outputs)
-*.pdf
+# *.pdf
 
 # Editor/OS files
 .DS_Store
