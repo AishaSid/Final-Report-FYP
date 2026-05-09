@@ -1,57 +1,46 @@
 FILENAME=thesis
-OUTPUTNAME=FYP1-FinalReport-F25-314-D-CoWriteIA
+OUTPUTNAME=FYP2-FinalReport-F25-314-D-CoWriteIA
 
 LATEX=pdflatex
 LATEXOPT=--shell-escape
-NONSTOP=--interaction=nonstopmode #batchmode
+NONSTOP=--interaction=nonstopmode
 
 LATEXMK=latexmk
 LATEXMKOPT=-pdf
 CONTINUOUS=-pvc
 
-NOMENCL=$(shell locate -i nomencl.ist)
+NOMENCL_IST=E:/MiKTeX/makeindex/nomencl/nomencl.ist
+GNUFIND=C:/Program Files/Git/usr/bin/find.exe
 
 all: ${OUTPUTNAME}.pdf
 
 ${OUTPUTNAME}.pdf: ${FILENAME}.tex
 	$(LATEXMK) $(LATEXMKOPT) -jobname=$(OUTPUTNAME) -pdflatex="$(LATEX) $(LATEXOPT) $(NONSTOP) %O %S" $(FILENAME).tex
-	#latexmk -quiet -pdfps ${FILENAME} 					# No pygmentize
-	#latexmk -r Makefile.rc -quiet -pdfps ${FILENAME} 	# pygmentize
-	#latexmk -r Makefile.rc -quiet -pdflatex="pdflatex --shell-escape %O %S" ${FILENAME}
+# Alternative build commands (not active):
+#   latexmk -quiet -pdfps ${FILENAME}                        # No pygmentize
+#   latexmk -r Makefile.rc -quiet -pdflatex="pdflatex --shell-escape %O %S" ${FILENAME}
 
 nomencl:
-	makeindex -s ${NOMENCL} -o ${FILENAME}.nls ${FILENAME}.nlo
+	makeindex -s "$(NOMENCL_IST)" -o $(FILENAME).nls $(FILENAME).nlo
 
 clean:
-	latexmk -c ${FILENAME}
-	-del "$(OUTPUTNAME).pdf"
+	latexmk -c $(FILENAME)
+	-del /f "$(OUTPUTNAME).pdf" 2>nul
 
 distclean:
-	latexmk -C ${FILENAME}
-	-del "$(OUTPUTNAME).pdf"
-	rm -rf $(FILENAME).pdfsync
-	find . -type f -name '*~' -delete	
-	find . -type f -name '*.tmp' -delete	
-	find . -type f -name '*.bbl' -delete	
-	find . -type f -name '*.synctex.gz' -delete
-	find . -type f -name '*.snm' -delete	
-	find . -type f -name '*.nav' -delete	
-	find . -type f -name '*.aux' -delete	
-	find . -type f -name '*.blg' -delete	
-	find . -type f -name '*.brf' -delete	
-	find . -type f -name '*.end' -delete	
-	#find . -type f -name '*.nls' -delete	
-	find . -type f -name '*.fls' -delete	
-	find . -type f -name '*.log' -delete	
-	#find . -type f -name '*.nlo' -delete	
-	find . -type f -name '*.out' -delete	
-	find . -type f -name '*.texshop' -delete
-	find . -type f -name '*.fdb_latexmk' -delete	
-	find . -type f -name '*.glo' -delete	
-	find . -type f -name '*.synctex.gz' -delete	
-	find . -type f -name '*converted-to.pdf' -delete	
+	latexmk -C $(FILENAME)
+	-del /f "$(OUTPUTNAME).pdf" 2>nul
+	-del /f "$(FILENAME).pdfsync" 2>nul
+	-"$(GNUFIND)" . -type f \( \
+		-name "*~" -o -name "*.tmp" -o -name "*.bbl" -o \
+		-name "*.synctex.gz" -o -name "*.snm" -o -name "*.nav" -o \
+		-name "*.aux" -o -name "*.blg" -o -name "*.brf" -o \
+		-name "*.end" -o -name "*.fls" -o -name "*.log" -o \
+		-name "*.out" -o -name "*.texshop" -o -name "*.fdb_latexmk" -o \
+		-name "*.glo" -o -name "*converted-to.pdf" \
+	\) -delete
 
 debug:
 	$(LATEX) $(LATEXOPT) $(FILENAME)
 
-.PHONY: all ${FILENAME}.pdf clean distclean
+.PHONY: all clean distclean nomencl debug
