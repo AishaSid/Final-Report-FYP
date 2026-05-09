@@ -1,11 +1,88 @@
 \chapter{Conclusions and Future Work}
+\label{ch:conclusions}
 
 \section{Conclusion}
-This project set out to address the core challenges faced by long-form writers and has resulted in a complete context-aware, memory-driven writing assistant. Through an analysis of existing tools and their gaps, we identified the need for a system that could maintain project context, support semantic retrieval, and keep writing assistance aligned with the user’s ongoing work. Based on these insights, we finalized the complete system architecture, data models, modules, and design decisions for CoWriteIA.
+\label{sec:conclusion}
 
-The implemented system now brings together project indexing, semantic memory, context-aware writing, character repository management, dialogue generation, research integration, and gap analysis within a single workflow. The result is a coherent and practical platform that supports writers across the main stages of their creative process.
+CoWriteIA was conceived to address a concrete and underserved problem: long-form writers working on complex projects have no single tool that combines project-level semantic memory, context-aware generation, character management, and research support in one coherent workflow. Existing solutions either provide isolated AI generation without narrative awareness, or strong organisational structure without any intelligence. This gap motivated the design and implementation of CoWriteIA across four development iterations.
+
+\subsection{What Was Built}
+
+The system delivers a full-stack, AI-assisted writing platform built on a FastAPI backend, a Next.js frontend, MongoDB Atlas as the primary document store, and ChromaDB as the vector store. The core of the platform is a Retrieval-Augmented Generation (RAG) pipeline that indexes all project documents into dense semantic embeddings using \texttt{sentence-transformers/all-MiniLM-L6-v2}, stores them in ChromaDB with a MongoDB fallback, and retrieves the most contextually relevant chunks at query time to ground every AI response in the writer's own material.
+
+On top of this foundation, seven functional modules were implemented and integrated:
+
+\begin{itemize}
+    \item \textbf{Project Indexing and Semantic Memory} — automatic chunking, embedding generation, and dual-store persistence (ChromaDB + MongoDB Atlas Vector Search) with background Celery workers for asynchronous indexing.
+    \item \textbf{Context-Aware Writing Assistant} — an inline copilot that assembles RAG context, analyses writing style (POV, tense, formality), and generates suggestions that match the author's established voice.
+    \item \textbf{Character and Scene Management} — persistent character profiles with structured attribute dictionaries, scene detection, and a relationship graph built from co-occurrence analysis across the project corpus.
+    \item \textbf{Dialogue Generation} — character-aware dialogue suggestions that inject personality traits, emotional tendencies, and narrative role into the LLM prompt, ensuring generated dialogue is consistent with established character voices.
+    \item \textbf{Research Integration Agent} — real-time web search via the Tavily API, synthesised by the Groq LLM into cited, writer-focused answers with inline source attribution, persisted to conversation history.
+    \item \textbf{Project Query Interface} — a conversational interface for asking natural-language questions about the project, answered using RAG-assembled context from the indexed corpus.
+    \item \textbf{Gap Analysis Module} — automated identification of incomplete or underdeveloped sections, with targeted suggestions for improving narrative coherence and coverage.
+\end{itemize}
+
+\subsection{Testing and Validation}
+
+The system was validated through a comprehensive testing strategy spanning 231 backend tests across integration, unit, and service layers, all passing at a 100\% rate. Black box testing confirmed correct API behaviour for valid and invalid inputs across all major endpoints. Unit tests isolated service logic using mocks and stubs, covering authentication, file processing, embedding generation, RAG context assembly, LLM orchestration, entity extraction, relationship discovery, edit proposals, and all three features introduced in Iteration III. Code coverage reached 32\% overall, with high-coverage modules including the research endpoint (100\%), web search service (92\%), copilot service (87\%), and edit proposal service (85\%). Lower coverage in background task modules reflects their dependency on live Celery and Redis infrastructure rather than gaps in logic coverage.
+
+\subsection{Deployment}
+
+The final iteration brought the system to a production-ready state. The Next.js frontend is deployed on Vercel with automatic CI/CD on every push to \texttt{main}. The FastAPI backend runs behind a reverse proxy with four Uvicorn workers, HTTPS enforcement, and a hardened middleware stack covering authentication, error handling, request logging, and CORS. MongoDB Atlas provides the persistent document store with continuous backups and an Atlas Vector Search index for fallback retrieval. ChromaDB runs as a co-located persistent server for primary vector search. Redis handles JWT refresh token storage, search result caching, and Celery task brokering. All secrets are managed through environment variables and never committed to the repository.
+
+\subsection{Reflection on Objectives}
+
+The original problem statement identified three core deficiencies in existing tools: lack of project-level context, absence of semantic memory, and disconnected workflows requiring writers to switch between multiple applications. CoWriteIA addresses all three. The RAG pipeline provides persistent semantic memory that scales with the project. The unified workspace integrates writing, research, character management, and query support in a single interface. The context-aware generation ensures that AI output is grounded in the writer's own material rather than generic training data. The result is a platform that meaningfully reduces cognitive overhead and supports narrative consistency throughout the creative process.
 
 \section{Future Work}
-Although the current system is complete and usable, a few enhancements could further strengthen it. Possible directions include refining retrieval quality for larger projects, expanding evaluation across more writing styles and document types, improving interface polish, and exploring additional deployment and performance optimizations.
+\label{sec:future-work}
 
-These refinements would not change the core design, but could make the platform more robust, adaptable, and responsive in broader real-world use.
+While the current system is complete and deployed, several directions could extend its capabilities and robustness.
+
+\subsection{Retrieval Quality and Scalability}
+
+The current RAG pipeline uses a fixed chunk size and a single embedding model. For very large projects (hundreds of thousands of words), retrieval quality could be improved through:
+
+\begin{itemize}
+    \item \textbf{Hierarchical indexing} — maintaining both fine-grained sentence-level chunks and coarser paragraph-level summaries, allowing the retriever to operate at the appropriate granularity depending on the query type.
+    \item \textbf{Re-ranking} — adding a cross-encoder re-ranking step after initial vector retrieval to improve precision before passing context to the LLM.
+    \item \textbf{Hybrid retrieval} — combining dense vector search with sparse BM25 keyword search for queries that contain rare proper nouns (character names, place names) that may not be well-represented in the embedding space.
+\end{itemize}
+
+\subsection{Evaluation Framework}
+
+The current validation relies on functional testing. A dedicated evaluation framework would strengthen confidence in generation quality:
+
+\begin{itemize}
+    \item \textbf{RAG faithfulness metrics} — measuring whether generated responses are grounded in the retrieved context using automated metrics such as RAGAS faithfulness and answer relevance scores.
+    \item \textbf{User studies} — structured evaluation with actual writers to assess perceived consistency, usefulness of suggestions, and reduction in context-switching compared to existing tools.
+    \item \textbf{Style consistency scoring} — automated measurement of stylistic alignment between generated text and the author's corpus using readability and stylometric features.
+\end{itemize}
+
+\subsection{Model and Provider Flexibility}
+
+The system currently depends on Groq (Llama 3.3 70B) for LLM inference and HuggingFace for embeddings. Future work could introduce:
+
+\begin{itemize}
+    \item A provider abstraction layer allowing writers to select their preferred LLM (OpenAI GPT-4o, Anthropic Claude, local Ollama models) without changes to the service logic.
+    \item Fine-tuned embedding models trained on literary corpora to improve semantic similarity for creative writing domains, where standard sentence-transformer models may underperform on stylistic or thematic queries.
+    \item Streaming responses for the chat and copilot interfaces, reducing perceived latency for long-form generation.
+\end{itemize}
+
+\subsection{Collaborative Writing}
+
+The current system is single-user per project. Extending it to support collaborative writing would require:
+
+\begin{itemize}
+    \item Real-time co-editing with operational transformation or CRDT-based conflict resolution.
+    \item Per-user contribution tracking and attribution within the shared project corpus.
+    \item Role-based access control (author, editor, reviewer) with corresponding permission scopes.
+\end{itemize}
+
+\subsection{Interface and Accessibility}
+
+The frontend is functional but has room for polish. Planned improvements include a richer text editor with inline diff visualisation for edit proposals, a visual character relationship graph rendered from the discovered entity network, and improved accessibility compliance across all interactive components.
+
+\subsection{Infrastructure Hardening}
+
+On the deployment side, future iterations could introduce container orchestration via Kubernetes for automatic scaling and self-healing, a dedicated secrets management service (AWS Secrets Manager or HashiCorp Vault) to replace environment variable injection, and a full observability stack (Prometheus metrics, Grafana dashboards, Sentry error tracking) for production monitoring beyond the current request-logging baseline.

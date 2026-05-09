@@ -1,0 +1,482 @@
+\chapter{Deployment and Production Infrastructure}
+\label{ch:deployment}
+\sloppy
+\setlength{\emergencystretch}{3em}
+
+This chapter documents the fourth and final iteration of the CoWriteIA project, which focused on transitioning the system from a locally-running development environment to a fully deployed, production-grade application. The deployment strategy was designed around a decoupled architecture: the Next.js frontend is hosted on Vercel, the FastAPI backend is containerised and served via a cloud provider, and all persistent data is managed through MongoDB Atlas (document store) and a hosted ChromaDB instance (vector store). Supporting infrastructure includes Redis for session caching and task queuing, Celery for background indexing jobs, and application-level monitoring for observability.
+
+\section{Deployment Architecture Overview}
+\label{sec:deployment-overview}
+
+The production system follows a three-tier, cloud-native architecture. Each tier is independently deployable and communicates over HTTPS, with environment-specific configuration injected at runtime through environment variables.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{3.5cm}|p{4cm}|p{4cm}|p{2.5cm}|}
+\hline
+\textbf{Tier} & \textbf{Technology} & \textbf{Hosting Platform} & \textbf{Protocol} \\
+\hline
+Frontend & Next.js 14 (App Router) & Vercel & HTTPS \\
+\hline
+Backend API & FastAPI + Uvicorn & Cloud VM / Container & HTTPS / REST \\
+\hline
+Document Store & MongoDB Atlas & AWS (Atlas-managed) & TLS \\
+\hline
+Vector Store & ChromaDB & Self-hosted container & HTTP (internal) \\
+\hline
+Cache / Queue & Redis & Upstash / self-hosted & TLS \\
+\hline
+Background Tasks & Celery workers & Same container host & Internal \\
+\hline
+LLM Provider & Groq API & Groq Cloud & HTTPS \\
+\hline
+Web Search & Tavily Search API & Tavily Cloud & HTTPS \\
+\hline
+Embeddings & HuggingFace Inference & HuggingFace Cloud & HTTPS \\
+\hline
+\end{tabular}
+\caption{Production Infrastructure Components}
+\label{tab:infra-components}
+\end{table}
+
+The frontend communicates exclusively with the backend API. The backend is the single integration point for all data stores, AI providers, and background workers. This separation ensures that API keys and database credentials are never exposed to the browser.
+
+\section{Frontend Deployment on Vercel}
+\label{sec:frontend-vercel}
+
+\subsection{Build Configuration}
+
+The CoWriteIA frontend is a Next.js 14 application configured for standalone output, which produces a self-contained build artefact suitable for containerised or serverless deployment. The relevant configuration in \texttt{next.config.js} is:
+
+\begin{itemize}
+    \item \texttt{output: 'standalone'} — produces a minimal Node.js server bundle with all required dependencies included, reducing cold-start overhead on Vercel's serverless functions.
+    \item \texttt{NEXT\_PUBLIC\_API\_URL} — injected at build time to point the client-side fetch calls at the correct backend origin. In production this is set to the deployed API base URL.
+    \item \texttt{async rewrites()} — proxies \texttt{/api/*} requests to the backend, avoiding cross-origin issues during local development and providing a clean URL namespace in production.
+\end{itemize}
+
+\subsection{Vercel Project Setup}
+
+Deployment to Vercel is triggered automatically on every push to the \texttt{main} branch via Vercel's GitHub integration. The deployment pipeline performs the following steps:
+
+\begin{enumerate}
+    \item Vercel detects the Next.js framework and selects the appropriate build preset.
+    \item \texttt{npm install} installs all dependencies from \texttt{package.json}.
+    \item \texttt{next build} compiles the application, runs type-checking, and generates the standalone output.
+    \item The build artefact is distributed across Vercel's global edge network.
+    \item Environment variables (listed in Table~\ref{tab:frontend-env}) are injected from the Vercel project settings.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{5.5cm}|p{8cm}|}
+\hline
+\textbf{Variable} & \textbf{Purpose} \\
+\hline
+\texttt{NEXT\_PUBLIC\_API\_URL} & Base URL of the deployed FastAPI backend \\
+\hline
+\texttt{NEXT\_PUBLIC\_APP\_NAME} & Application display name \\
+\hline
+\texttt{NEXT\_PUBLIC\_APP\_VERSION} & Displayed version string \\
+\hline
+\end{tabular}
+\caption{Frontend Environment Variables (Vercel)}
+\label{tab:frontend-env}
+\end{table}
+
+\subsection{API Routing and CORS}
+
+Because the frontend and backend are hosted on different origins, CORS is configured on the FastAPI side. The \texttt{CORS\_ORIGINS} setting in \texttt{app/core/config.py} is populated at runtime with the Vercel deployment URL. The \texttt{CORSMiddleware} added in \texttt{app/main.py} allows credentialed requests from these origins, enabling JWT tokens stored in \texttt{httpOnly} cookies to be forwarded correctly.
+
+The Next.js rewrite rule (\texttt{/api/:path*} $\rightarrow$ backend) is active only in local development. In production, the frontend calls the backend URL directly, and the Vercel deployment domain is added to the backend's allowed origins list.
+
+\subsection{Preview Deployments}
+
+Vercel automatically creates a preview deployment for every pull request. Each preview receives a unique URL and inherits the same environment variable set as production, with the exception of \texttt{NEXT\_PUBLIC\_API\_URL}, which can be overridden to point at a staging backend instance. This enables end-to-end testing of frontend changes before merging.
+
+\section{Backend API Deployment}
+\label{sec:backend-deployment}
+
+\subsection{Runtime and Server}
+
+The FastAPI application is served by Uvicorn, an ASGI server. In production the recommended invocation is:
+
+\begin{verbatim}
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+    --workers 4 --log-level info
+\end{verbatim}
+
+The number of workers is set to match the available CPU cores on the host. Each worker is an independent process, providing basic horizontal scaling within a single machine. For higher traffic, multiple instances can be placed behind a load balancer.
+
+\subsection{Startup Lifecycle}
+
+The application uses FastAPI's \texttt{lifespan} context manager (defined in \texttt{app/main.py}) to manage connection pools:
+
+\begin{enumerate}
+    \item \textbf{Startup:} \texttt{connect\_to\_mongo()} establishes the Motor async client to MongoDB Atlas; \texttt{connect\_to\_redis()} opens the aioredis connection pool.
+    \item \textbf{Shutdown:} Both connections are gracefully closed, ensuring in-flight requests complete before the process exits.
+\end{enumerate}
+
+This approach avoids per-request connection overhead and ensures that connection limits on Atlas and Redis are respected.
+
+\subsection{Middleware Stack}
+
+The production middleware stack (innermost to outermost) is:
+
+\begin{enumerate}
+    \item \texttt{TrustedHostMiddleware} — rejects requests with unexpected \texttt{Host} headers, mitigating host-header injection attacks. Allowed hosts include \texttt{localhost} and \texttt{*.cowriteai.com}.
+    \item \texttt{ErrorHandlingMiddleware} — catches unhandled exceptions and returns structured JSON error responses, preventing stack traces from leaking to clients.
+    \item \texttt{RequestLoggingMiddleware} — logs method, path, status code, and latency for every request, feeding the monitoring pipeline.
+    \item \texttt{AuthMiddleware} — validates JWT tokens on protected routes, attaching the decoded user identity to the request state.
+    \item \texttt{CORSMiddleware} — handles preflight \texttt{OPTIONS} requests and injects \texttt{Access-Control-*} headers.
+\end{enumerate}
+
+\subsection{Environment Configuration}
+
+All secrets and environment-specific values are injected via environment variables, never committed to source control. Table~\ref{tab:backend-env} lists the key production variables.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{5cm}|p{8.5cm}|}
+\hline
+\textbf{Variable} & \textbf{Purpose} \\
+\hline
+\texttt{DATABASE\_URL} & MongoDB Atlas connection string (SRV format) \\
+\hline
+\texttt{MONGODB\_DB\_NAME} & Target database name \\
+\hline
+\texttt{MONGODB\_COLLECTION\_PREFIX} & Collection prefix (\texttt{prod\_} in production) \\
+\hline
+\texttt{SECRET\_KEY} & JWT signing secret (minimum 32 random bytes) \\
+\hline
+\texttt{REDIS\_URL} & Redis connection string \\
+\hline
+\texttt{GROQ\_API\_KEY} & Groq LLM API key \\
+\hline
+\texttt{HF\_API\_TOKEN} & HuggingFace Inference API token \\
+\hline
+\texttt{TAVILY\_API\_KEY} & Tavily web search API key \\
+\hline
+\texttt{CORS\_ORIGINS} & Comma-separated list of allowed frontend origins \\
+\hline
+\texttt{ENVIRONMENT} & Set to \texttt{production} to disable debug endpoints \\
+\hline
+\texttt{DEBUG} & Set to \texttt{false} to hide \texttt{/docs} and \texttt{/redoc} \\
+\hline
+\end{tabular}
+\caption{Backend Production Environment Variables}
+\label{tab:backend-env}
+\end{table}
+
+When \texttt{ENVIRONMENT=production} and \texttt{DEBUG=false}, the FastAPI application disables the interactive Swagger UI (\texttt{/docs}) and ReDoc (\texttt{/redoc}) endpoints, reducing the attack surface.
+
+\section{MongoDB Atlas Integration}
+\label{sec:mongodb-atlas}
+
+\subsection{Database Design and Collections}
+
+CoWriteIA uses MongoDB as its primary document store. The schema is managed through Pydantic models (in \texttt{app/models/}) and accessed via Motor, the async MongoDB driver. The production database on Atlas contains the collections listed in Table~\ref{tab:mongo-collections}.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{4cm}|p{9.5cm}|}
+\hline
+\textbf{Collection} & \textbf{Contents} \\
+\hline
+\texttt{users} & User accounts, hashed passwords, refresh token hashes \\
+\hline
+\texttt{projects} & Project metadata, owner reference, creation timestamps \\
+\hline
+\texttt{files} & File records, extracted text content, processing status \\
+\hline
+\texttt{text\_chunks} & Chunked text segments with embedding vectors and position metadata \\
+\hline
+\texttt{entities} & Extracted characters, locations, and themes with attribute dictionaries \\
+\hline
+\texttt{entity\_mentions} & Per-chunk entity occurrence records \\
+\hline
+\texttt{relationships} & Discovered entity relationships with co-occurrence scores \\
+\hline
+\texttt{conversations} & Conversation sessions with message history \\
+\hline
+\texttt{edit\_proposals} & AI-generated edit suggestions with diff payloads \\
+\hline
+\texttt{indexing\_status} & Per-file indexing job state and progress tracking \\
+\hline
+\texttt{position\_index} & Line-level position mappings for in-document navigation \\
+\hline
+\texttt{search\_logs} & Query logs for analytics and cache warming \\
+\hline
+\end{tabular}
+\caption{MongoDB Collections in Production}
+\label{tab:mongo-collections}
+\end{table}
+
+\subsection{Atlas Configuration}
+
+The production cluster is configured with the following settings:
+
+\begin{itemize}
+    \item \textbf{Cluster tier:} M10 or higher, providing dedicated resources and enabling Atlas Search and Vector Search indexes.
+    \item \textbf{Connection string format:} SRV (\texttt{mongodb+srv://}) with \texttt{retryWrites=true\&w=majority} for write durability.
+    \item \textbf{Network access:} IP allowlist restricted to the backend server's egress IP addresses. No public access from arbitrary IPs.
+    \item \textbf{Database users:} A dedicated application user with read/write access to the \texttt{cowrite\_ai} database only, following the principle of least privilege.
+    \item \textbf{Backups:} Continuous cloud backups enabled with a 7-day retention window.
+\end{itemize}
+
+\subsection{Vector Search Index}
+
+MongoDB Atlas Vector Search is used as the fallback retrieval path when ChromaDB is unavailable. An Atlas Search index is defined on the \texttt{text\_chunks} collection over the \texttt{embedding\_vector} field (384-dimensional, cosine similarity). The \texttt{TextChunkRepository.vector\_search} method issues an aggregation pipeline using the \texttt{\$vectorSearch} stage:
+
+\begin{verbatim}
+{
+  "$vectorSearch": {
+    "index": "embedding_index",
+    "path": "embedding_vector",
+    "queryVector": <query_embedding>,
+    "numCandidates": 150,
+    "limit": 10
+  }
+}
+\end{verbatim}
+
+This provides sub-second approximate nearest-neighbour retrieval directly within the database, eliminating the need for a separate vector store in constrained deployment environments.
+
+\subsection{Connection Pooling}
+
+The Motor client is initialised once at application startup and shared across all requests via FastAPI's dependency injection system (\texttt{app/core/dependencies.py}). The default Motor connection pool size is sufficient for the expected concurrency; for higher loads, \texttt{maxPoolSize} can be tuned in the connection string.
+
+\section{Vector Database: ChromaDB}
+\label{sec:chromadb}
+
+\subsection{Role in the System}
+
+ChromaDB serves as the primary vector store for semantic similarity search. It stores dense embedding vectors alongside metadata (chunk ID, project ID, file ID) and supports efficient approximate nearest-neighbour queries using the HNSW algorithm. The system prefers ChromaDB over MongoDB Atlas Vector Search because HNSW queries are faster for large collections and ChromaDB's filtering API allows project-scoped retrieval without full-collection scans.
+
+\subsection{Deployment}
+
+ChromaDB is deployed as a persistent server instance co-located with the backend on the same host or within the same private network. The \texttt{ChromaService} in \texttt{app/services/chroma\_service.py} connects to it via the HTTP client:
+
+\begin{verbatim}
+chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
+\end{verbatim}
+
+Because ChromaDB is accessed only by the backend and is not exposed to the public internet, no authentication layer is required beyond network-level isolation. In a Kubernetes deployment, ChromaDB would run as a sidecar or a separate pod within the same namespace.
+
+\subsection{Collection Management}
+
+Each project receives its own ChromaDB collection, named by project ID. The \texttt{get\_or\_create\_collection} method ensures idempotent initialisation. Collections are populated during the indexing pipeline and queried during RAG context assembly. When a file is reprocessed, the corresponding embeddings are deleted from the collection before re-insertion to prevent stale vector entries.
+
+\subsection{Fallback Strategy}
+
+The system implements a graceful degradation path: if ChromaDB is unreachable (connection refused, timeout), the \texttt{SearchService} automatically falls back to MongoDB Atlas Vector Search. This is implemented via a try/except block in \texttt{search\_service.py} that catches \texttt{chromadb.errors.ChromaError} and re-routes the query. The fallback is transparent to the caller and is logged for monitoring purposes.
+
+\section{Redis: Caching and Task Queue}
+\label{sec:redis}
+
+\subsection{Session and Response Caching}
+
+Redis is used to cache frequently accessed data and reduce database load:
+
+\begin{itemize}
+    \item \textbf{JWT refresh token storage:} Refresh token hashes are stored in Redis with a TTL matching the token expiry (7 days by default), enabling fast token validation and revocation without a database round-trip.
+    \item \textbf{Search result caching:} The \texttt{SearchCacheService} caches semantic search results keyed by a hash of the query embedding and project ID. Cache entries expire after a configurable TTL, balancing freshness against query latency.
+    \item \textbf{Rate limiting:} Request counts per user are tracked in Redis with a sliding window, enforcing API rate limits at the middleware layer.
+\end{itemize}
+
+\subsection{Celery Task Queue}
+
+Background indexing jobs are managed by Celery, using Redis as both the message broker and the result backend. The Celery configuration in \texttt{app/core/celery.py} connects to Redis via \texttt{CELERY\_BROKER\_URL} and \texttt{CELERY\_RESULT\_BACKEND}. The following background tasks are registered:
+
+\begin{itemize}
+    \item \texttt{index\_document\_task} — triggered after a file upload; orchestrates text extraction, chunking, embedding generation, and ChromaDB insertion.
+    \item \texttt{batch\_generate\_embeddings\_task} — processes chunks that are missing embeddings, used for recovery after partial failures.
+    \item \texttt{reindex\_project\_task} — re-processes all files in a project, used when the embedding model is updated.
+\end{itemize}
+
+In production, Celery workers are started as separate processes on the same host:
+
+\begin{verbatim}
+celery -A app.core.celery worker --loglevel=info
+    --concurrency=2 -Q indexing
+\end{verbatim}
+
+Worker concurrency is set conservatively to avoid saturating the embedding model inference endpoint. Task results and failure states are persisted in Redis and surfaced through the \texttt{IndexingStatusRepository}, allowing the frontend to poll for indexing progress.
+
+\subsection{Redis Deployment Options}
+
+For production, two options were evaluated:
+
+\begin{itemize}
+    \item \textbf{Upstash Redis:} A serverless Redis service with a REST API and TLS by default. Suitable for low-to-medium traffic; no infrastructure management required. The connection string format is compatible with aioredis.
+    \item \textbf{Self-hosted Redis:} A Redis instance running on the same VM as the backend, connected over localhost. Lower latency but requires manual backup and failover configuration.
+\end{itemize}
+
+The recommended production configuration uses Upstash for simplicity, with \texttt{REDIS\_URL} set to the Upstash TLS endpoint.
+
+\section{API Communication and Integration}
+\label{sec:api-communication}
+
+\subsection{Frontend-to-Backend API Calls}
+
+All frontend API calls are made using a centralised \texttt{apiClient} utility that wraps the native \texttt{fetch} API. The client:
+
+\begin{itemize}
+    \item Reads \texttt{NEXT\_PUBLIC\_API\_URL} from the environment to construct absolute URLs.
+    \item Attaches the JWT access token from the browser's \texttt{localStorage} (or a secure cookie) as a \texttt{Bearer} token in the \texttt{Authorization} header.
+    \item Handles 401 responses by attempting a token refresh via \texttt{POST /api/v1/auth/refresh}, then retrying the original request once.
+    \item Returns typed response objects, with error payloads normalised to a consistent \texttt{\{detail: string\}} shape.
+\end{itemize}
+
+\subsection{Third-Party API Integrations}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{3.5cm}|p{3.5cm}|p{6.5cm}|}
+\hline
+\textbf{Provider} & \textbf{Endpoint Used} & \textbf{Integration Point} \\
+\hline
+Groq & \texttt{/openai/v1/chat/completions} & \texttt{GroqService.generate\_response()} — LLM inference for chat, copilot, and research synthesis \\
+\hline
+HuggingFace & Inference API & \texttt{HuggingFaceService} — genre-specific model inference and embedding generation fallback \\
+\hline
+Tavily & \texttt{/search} & \texttt{WebSearchService.search()} — real-time web search for the Research Integration Agent \\
+\hline
+\end{tabular}
+\caption{Third-Party API Integrations}
+\label{tab:third-party-apis}
+\end{table}
+
+All third-party API keys are stored exclusively as backend environment variables. The frontend never receives or transmits these keys. Requests to external providers are made server-side from the FastAPI backend, ensuring that keys cannot be extracted from browser network traffic.
+
+\subsection{Request Flow: End-to-End Example}
+
+The following sequence illustrates a complete AI chat request in the production environment:
+
+\begin{enumerate}
+    \item User types a message in the frontend chat interface and submits.
+    \item The frontend \texttt{apiClient} sends \texttt{POST /api/v1/chat/\{project\_id\}/message} with the JWT token in the \texttt{Authorization} header.
+    \item The request reaches the FastAPI backend on Vercel's edge or the cloud VM.
+    \item \texttt{AuthMiddleware} validates the JWT; the user identity is attached to the request state.
+    \item \texttt{AIChatService.chat()} is invoked:
+    \begin{enumerate}
+        \item \texttt{RAGContextService.assemble\_context()} queries ChromaDB (or Atlas fallback) for relevant chunks.
+        \item The context is formatted and combined with the conversation history retrieved from MongoDB.
+        \item \texttt{GroqService.generate\_response()} sends the assembled prompt to the Groq API over HTTPS.
+        \item The response is persisted to MongoDB via \texttt{MessageRepository}.
+    \end{enumerate}
+    \item The JSON response is returned to the frontend and rendered in the chat UI.
+\end{enumerate}
+
+\section{Monitoring and Observability}
+\label{sec:monitoring}
+
+\subsection{Application-Level Logging}
+
+The backend uses Python's standard \texttt{logging} module, configured in \texttt{app/main.py}. In production (\texttt{DEBUG=false}), the log level is set to \texttt{INFO}. The \texttt{RequestLoggingMiddleware} emits a structured log line for every HTTP request, including:
+
+\begin{itemize}
+    \item HTTP method and path
+    \item Response status code
+    \item Request duration in milliseconds
+    \item User ID (if authenticated)
+\end{itemize}
+
+These logs are captured by the hosting platform's log aggregation service (e.g., Vercel Log Drains, AWS CloudWatch, or a self-hosted ELK stack) and can be queried for debugging and performance analysis.
+
+\subsection{Health Check Endpoint}
+
+The \texttt{GET /health} endpoint (defined in \texttt{app/main.py}) returns the application status, environment name, and debug flag. This endpoint is used by:
+
+\begin{itemize}
+    \item Load balancers and container orchestrators (e.g., Kubernetes liveness probes) to determine whether the instance is ready to serve traffic.
+    \item Uptime monitoring services (e.g., UptimeRobot, Better Uptime) to alert on availability degradation.
+\end{itemize}
+
+An extended health check can be added to verify downstream dependencies (MongoDB connectivity, Redis ping, ChromaDB reachability) and return a degraded status if any dependency is unavailable.
+
+\subsection{Error Tracking}
+
+The \texttt{ErrorHandlingMiddleware} catches all unhandled exceptions and returns a structured \texttt{500 Internal Server Error} response. In production, these events should be forwarded to an error tracking service such as Sentry. Integration requires adding the Sentry SDK and initialising it with the \texttt{SENTRY\_DSN} environment variable before the application starts. Sentry captures the full exception traceback, request context, and user identity, enabling rapid diagnosis of production issues.
+
+\subsection{Performance Metrics}
+
+Key performance indicators monitored in production include:
+
+\begin{itemize}
+    \item \textbf{API response latency:} P50, P95, and P99 latencies for the most frequently called endpoints (\texttt{/chat}, \texttt{/copilot/suggest}, \texttt{/search}).
+    \item \textbf{Embedding generation time:} Duration of \texttt{EmbeddingService.generate\_embeddings()} calls, which dominate indexing latency.
+    \item \textbf{LLM response time:} Time-to-first-token and total generation time for Groq API calls.
+    \item \textbf{Celery queue depth:} Number of pending indexing tasks; a growing queue indicates worker capacity needs to be increased.
+    \item \textbf{MongoDB query latency:} Slow query logs from Atlas Performance Advisor identify missing indexes or inefficient aggregation pipelines.
+\end{itemize}
+
+\subsection{Vercel Analytics}
+
+For the frontend, Vercel's built-in Web Analytics and Speed Insights provide:
+
+\begin{itemize}
+    \item Real User Monitoring (RUM) metrics: Core Web Vitals (LCP, FID, CLS) measured from actual user sessions.
+    \item Page-level traffic breakdown and geographic distribution.
+    \item Build and deployment history with per-deployment performance comparisons.
+\end{itemize}
+
+These metrics complement backend observability and provide a complete picture of end-to-end user experience.
+
+\section{Security Considerations}
+\label{sec:security}
+
+\subsection{Authentication and Authorisation}
+
+The production system enforces JWT-based authentication on all non-public endpoints. Access tokens have a 30-minute expiry; refresh tokens (7-day expiry) are stored server-side in Redis and can be revoked immediately by deleting the Redis entry. The \texttt{AuthMiddleware} validates the token signature using the \texttt{SECRET\_KEY} and the \texttt{HS256} algorithm on every request.
+
+All database queries are scoped to the authenticated user's projects, preventing horizontal privilege escalation. The repository layer enforces this by including \texttt{user\_id} or \texttt{project\_id} filters on every query.
+
+\subsection{Secret Management}
+
+No secrets are committed to the repository. The \texttt{.env.example} file documents required variables with placeholder values. In production, secrets are injected via the hosting platform's secret management system (Vercel Environment Variables, AWS Secrets Manager, or equivalent). The \texttt{.gitignore} file excludes \texttt{.env} and \texttt{.env.local} from version control.
+
+\subsection{Input Validation}
+
+All API request bodies are validated by Pydantic models before reaching service logic. Invalid or malformed requests are rejected at the schema validation layer with a \texttt{422 Unprocessable Entity} response, preventing injection attacks and unexpected data shapes from propagating into the system.
+
+\subsection{HTTPS Enforcement}
+
+All production traffic is served over HTTPS. Vercel enforces HTTPS for all deployments by default. The backend should be placed behind a reverse proxy (e.g., Nginx or a cloud load balancer) configured to redirect HTTP to HTTPS and to set \texttt{Strict-Transport-Security} headers.
+
+\section{Deployment Summary}
+\label{sec:deployment-summary}
+
+Table~\ref{tab:deployment-summary} summarises the complete production deployment configuration for CoWriteIA.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{4cm}|p{9.5cm}|}
+\hline
+\textbf{Component} & \textbf{Production Configuration} \\
+\hline
+Frontend & Next.js 14, standalone build, deployed on Vercel with automatic GitHub CI/CD \\
+\hline
+Backend API & FastAPI + Uvicorn, 4 workers, cloud VM or container, HTTPS via reverse proxy \\
+\hline
+Document Store & MongoDB Atlas M10+, SRV connection, IP allowlist, continuous backups \\
+\hline
+Vector Store & ChromaDB persistent server, co-located with backend, HNSW index per project \\
+\hline
+Cache / Queue & Redis (Upstash or self-hosted), TLS, used for JWT storage, search cache, and Celery broker \\
+\hline
+Background Workers & Celery workers (concurrency 2), dedicated indexing queue, result backend in Redis \\
+\hline
+LLM Inference & Groq API (\texttt{llama-3.3-70b-versatile}), server-side only, key in environment variable \\
+\hline
+Web Search & Tavily Search API, server-side only, graceful degradation if unavailable \\
+\hline
+Embeddings & \texttt{sentence-transformers/all-MiniLM-L6-v2} via HuggingFace Inference API \\
+\hline
+Monitoring & Request logging middleware, \texttt{/health} endpoint, Vercel Analytics, optional Sentry \\
+\hline
+Security & JWT auth (HS256, 30-min access / 7-day refresh), HTTPS, Pydantic validation, no secrets in repo \\
+\hline
+\end{tabular}
+\caption{CoWriteIA Production Deployment Summary}
+\label{tab:deployment-summary}
+\end{table}
